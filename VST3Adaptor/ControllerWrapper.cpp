@@ -3,7 +3,6 @@
 #include "./MyViewStream.h"
 #include "pluginterfaces/vst/ivsteditcontroller.h"
 #include "pluginterfaces/vst/ivstaudioprocessor.h"
-//#include "pluginterfaces\base\ibstream.h"
 #include "GmpiSdkCommon.h"
 
 using namespace gmpi;
@@ -49,14 +48,6 @@ ControllerWrapper::ControllerWrapper(const char* filename, const std::string& uu
 
 ControllerWrapper::~ControllerWrapper()
 {
-#if 0 // wv
-    if (processor_component_ptr && processor_vstEffect__ptr)
-    {
-		// ensure the processor don't try to access the plugin.
-		*processor_component_ptr = nullptr;
-		*processor_vstEffect__ptr = nullptr;
-    }
-#endif
 	if (windowController)
 	{
 		windowController->destroyView();
@@ -74,11 +65,6 @@ void ControllerWrapper::setParameterFromProcessorUnsafe(uint32_t paramId, double
 	strm << messageSize;
 	strm << paramId;
 	strm << valueNormalized;
-//	strm << static_cast<int32_t>(sizeof(valueNormalized));
-	//strm.Write(
-	//	&valueNormalized,
-	//	static_cast<int32_t>(sizeof(valueNormalized))
-	//);
 
 	strm.Send();
 }

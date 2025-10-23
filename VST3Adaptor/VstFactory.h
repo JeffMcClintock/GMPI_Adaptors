@@ -9,8 +9,6 @@
 #include "GmpiApiCommon.h"
 #include "RefCountMacros.h"
 
-typedef gmpi::api::IUnknown* (*MP_CreateFunc2)();
-
 class VstFactory* GetVstFactory();
 
 // VstFactory - a singleton object. The plugin registers it's ID with the factory.
@@ -18,15 +16,17 @@ class VstFactory : public gmpi::api::IPluginFactory
 {
 	struct pluginInfo
 	{
-		std::string uuid_;
-		std::string name_;
-		std::string xml_;
-		std::string shellPath_;
+		std::string uuid;
+		std::string name;
+		std::string shellPath;
+
+		int numInputs{};
+		int numOutputs{};
+		int numMidiInputs{};
 	};
 
-	std::vector< pluginInfo > plugins;
+	std::vector<pluginInfo> plugins;
 	std::unordered_map<std::string, int> scannedFiles;
-	std::vector< std::string > duplicates;
 
 	bool scannedPlugins = {};
 	static const char* pluginIdPrefix;
@@ -38,15 +38,11 @@ public:
 	gmpi::ReturnCode createInstance(const char* id, gmpi::api::PluginSubtype subtype, void** returnInterface) override;
 	gmpi::ReturnCode getPluginInformation(int32_t index, gmpi::api::IString* returnXml) override;
 	std::string uuidFromWrapperID(const char* uniqueId);
-	std::string XmlFromPlugin(VST3::Hosting::PluginFactory& factory, const VST3::UID& classId, std::string name);
-	std::string getDiagnostics();
 
 private:
-	void ShallowScanVsts();
 	void ScanVsts();
 	void ScanDll(const std::string& load_filename);
-
-	void RecursiveScanVsts(const std::string searchPath);
+	void ScanFolder(const std::string searchPath);
 
 	std::wstring getSettingFilePath();
 

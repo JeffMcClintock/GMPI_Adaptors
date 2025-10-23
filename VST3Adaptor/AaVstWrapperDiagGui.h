@@ -21,7 +21,7 @@ ReturnCode render(gmpi::drawing::api::IDeviceContext* drawingContext) override
 	auto textFormat = g.getFactory().createTextFormat();
 	auto brush = g.createSolidColorBrush(Colors::Black);
 
-	g.drawTextU(GetVstFactory()->getDiagnostics(), textFormat, bounds, brush);
+	g.drawTextU("unused"/*GetVstFactory()->getDiagnostics()*/, textFormat, bounds, brush);
 
 	return ReturnCode::Ok;
 }

@@ -3,10 +3,8 @@
 #include <sstream>
 #include <iostream>
 #include <fstream>
-#include <iomanip>
 #include <vector>
 #include <filesystem>
-#include <assert.h>
 #include "myPluginProvider.h"
 #include "helpers/GmpiPluginEditor.h"
 #include "ProcessorWrapper.h"
@@ -18,13 +16,11 @@
 #include "shlobj.h"
 #endif
 
-
 #define INFO_PLUGIN_ID "GMPI: VST3 ADAPTOR"
 #define PARAM_SET_PLUGIN_ID "GMPI: VST3 Param Set"
 
 using namespace std;
 using namespace gmpi;
-
 using namespace Steinberg;
 using namespace Steinberg::Vst;
 
@@ -32,166 +28,173 @@ const char* VstFactory::pluginIdPrefix = "gmpiVST3ADAPTOR:";
 
 gmpi::ReturnCode VstFactory::createInstance(const char* uniqueId, gmpi::api::PluginSubtype subtype, void** returnInterface)
 {
-	if (!scannedPlugins)
-	{
-		loadPluginInfo();
-	}
+	loadPluginInfo();
 
 	*returnInterface = nullptr; // if we fail for any reason, default return-val to NULL.
 
 	if (strcmp(uniqueId, INFO_PLUGIN_ID) == 0)
 	{
 		if (gmpi::api::PluginSubtype::Editor == subtype)
-		{
-			auto wp = new AaVstWrapperDiagGui();
+			*returnInterface = static_cast<gmpi::api::IEditor*>(new AaVstWrapperDiagGui());
 
-			*returnInterface = static_cast<gmpi::api::IEditor*>(wp);
-
-			return gmpi::ReturnCode::Ok;
-		}
-		return gmpi::ReturnCode::Fail;
+		return *returnInterface ? gmpi::ReturnCode::Ok : gmpi::ReturnCode::Fail;
 	}
 
 	if (strcmp(uniqueId, PARAM_SET_PLUGIN_ID) == 0)
 	{
 		if (gmpi::api::PluginSubtype::Audio == subtype)
-		{
-			auto wp = new Vst3ParamSet();
+			*returnInterface = static_cast<gmpi::api::IProcessor*>(new Vst3ParamSet());
 
-			*returnInterface = static_cast<gmpi::api::IProcessor*>(wp);
-
-			return gmpi::ReturnCode::Ok;
-		}
-		return gmpi::ReturnCode::Fail;
+		return *returnInterface ? gmpi::ReturnCode::Ok : gmpi::ReturnCode::Fail;
 	}
+
 	const auto vstUniqueId = uuidFromWrapperID(uniqueId);
 
 	for (auto& pluginInfo : plugins)
 	{
-		if (pluginInfo.uuid_ == vstUniqueId)
+		if (pluginInfo.uuid == vstUniqueId)
 		{
 			switch ((int)subtype)
 			{
 			case (int) gmpi::api::PluginSubtype::Audio:
-			{
-				auto wp = new ProcessorWrapper();
-
-				*returnInterface = static_cast<void*>(wp);
-
-				return gmpi::ReturnCode::Ok;
-			}
-			break;
+				*returnInterface = static_cast<void*>(new ProcessorWrapper());
+				break;
 
 			case (int) gmpi::api::PluginSubtype::Controller:
-			{
-				auto wp = new ControllerWrapper(pluginInfo.shellPath_.c_str(), vstUniqueId);
-
-				*returnInterface = static_cast<gmpi::api::IController_x*>(wp);
-
-				return gmpi::ReturnCode::Ok;
-			}
-			break;
+				*returnInterface = static_cast<gmpi::api::IController_x*>(new ControllerWrapper(pluginInfo.shellPath.c_str(), vstUniqueId));
+				break;
 
 			case (int) gmpi::api::PluginSubtype::Editor:
-			{
-				auto wp = new EditButtonGui();
-
-				*returnInterface = static_cast<gmpi::api::IEditor*>(wp);
-
-				return gmpi::ReturnCode::Ok;
-			}
-			break;
+				*returnInterface = static_cast<gmpi::api::IEditor*>(new EditButtonGui());
+				break;
 
 			default:
-				return gmpi::ReturnCode::Fail;
 				break;
 			}
+
+			return *returnInterface ? gmpi::ReturnCode::Ok : gmpi::ReturnCode::Fail;
 		}
 	}
 
 	if (gmpi::api::PluginSubtype::Editor == subtype)
-	{
-		string err("Error");
-		{
-			err = "Can't find VST3 Plugin:" + vstUniqueId;
-			err += "\n";
-		}
+		*returnInterface = static_cast<gmpi::api::IEditor*>(new VstwrapperfailGui("Can't find VST3 Plugin:" + vstUniqueId));
 
-		auto wp = new VstwrapperfailGui();
-		wp->errorMsg = err;
-
-		*returnInterface = static_cast<gmpi::api::IEditor*>(wp);
-
-		return gmpi::ReturnCode::Ok;
-	}
-
-	return gmpi::ReturnCode::Fail;
+	return *returnInterface ? gmpi::ReturnCode::Ok : gmpi::ReturnCode::Fail;
 }
 
 gmpi::ReturnCode VstFactory::getPluginInformation(int32_t index, gmpi::api::IString* returnXml)
 {
-	if (!scannedPlugins)
+	loadPluginInfo();
+
+	if (0 == index)
 	{
-		loadPluginInfo();
+		ScanVsts();
+
+		ostringstream oss;
+		oss << "<Plugin id=\"" << INFO_PLUGIN_ID << "\" name=\"Wrapper Info\" category=\"VST3 Plugins\" >"
+			"<GUI graphicsApi=\"GmpiGui\"><Pin/></GUI>"
+			"</Plugin>\n";
+
+		const auto xml = oss.str();
+
+		returnXml->setData(xml.data(), (int32_t)xml.size());
+		return gmpi::ReturnCode::Ok;
 	}
+	else if (1 == index)
+	{
+		const std::string xml =
+R"xml(
+<Plugin id="GMPI: VST3 Param Set" name="VST3 Param Set" category="VST3 Plugins">
+<Audio>
+<Pin name="Signal In" datatype="float" />
+<Pin name="Param Idx" datatype="int" default="0" />
+<Pin name="ParamBuss" datatype="midi" direction="out" />
+</Audio>
+</Plugin>
+)xml";
+		returnXml->setData(xml.data(), (int32_t)xml.size());
+		return gmpi::ReturnCode::Ok;
+	}
+
+	index -= 2; // adjust for info and param-set plugins.
 
 	if (index >= 0 && index < (int)plugins.size())
 	{
-		returnXml->setData(plugins[index].xml_.data(), (int32_t)plugins[index].xml_.size());
+		const auto& info = plugins[index];
+
+		ostringstream oss;
+		oss << "<Plugin id=\"" << pluginIdPrefix << info.uuid << "\" name=\"" << info.name << "\" category=\"VST3 Plugins\" >";
+
+		// Parameter to store state.
+		oss << "<Parameters>";
+
+		int i = 0;
+
+		// next-to last parameter stores state from getChunk() / setChunk().
+		oss << "<Parameter id=\"" << std::dec << i << "\" name=\"chunk\" ignorePatchChange=\"true\" datatype=\"blob\" />";
+		++i;
+
+		// Provide parameter to share pointer to plugin.
+		oss << "<Parameter id=\"" << std::dec << i << "\" name=\"effectptr\" ignorePatchChange=\"true\" persistant=\"false\" private=\"true\" datatype=\"blob\" />";
+
+		oss << "</Parameters>";
+
+		// Controller.
+		oss << "<Controller/>";
+
+		// Audio.
+		oss << "<Audio>";
+
+		// Add Power and Tempo pins.
+		// TODO !!! revise these, need auto sleep? it was a bit buggy i think
+	//		<Pin name = "Auto Sleep" datatype = "bool" isMinimised="true" />
+
+		oss << R"XML(
+	<Pin name = "Power/Bypass" datatype = "bool" default = "1" />
+	<Pin name = "Host BPM" datatype = "float" hostConnect = "Time/BPM" />
+	<Pin name = "Host SP" datatype = "float" hostConnect = "Time/SongPosition" />
+	<Pin name = "Host Transport" datatype = "bool" hostConnect = "Time/TransportPlaying" />
+	<Pin name = "Numerator" datatype = "int" hostConnect = "Time/Timesignature/Numerator" />
+	<Pin name = "Denominator" datatype = "int" hostConnect = "Time/Timesignature/Denominator" />
+	<Pin name = "Host Bar Start" datatype = "float" hostConnect = "Time/BarStartPosition" />
+	<Pin datatype = "int" hostConnect = "Processor/OfflineRenderMode" />
+)XML";
+
+		auto controllerPointerParamId = i;
+		oss << "<Pin name=\"effectptr\" datatype=\"blob\" parameterId=\"" << controllerPointerParamId << "\" private=\"true\" />";
+
+		if (info.numMidiInputs)
+		{
+			oss << "<Pin name=\"MIDI In\" direction=\"in\" datatype=\"midi\" />";
+		}
+
+		// Direct parameter access via MIDI
+		oss << "<Pin name=\"ParamBuss\" direction=\"in\" datatype=\"midi\" />";
+
+		for (int i = 0; i < info.numInputs; ++i)
+			oss << "<Pin name=\"Signal In\" datatype=\"float\" rate=\"audio\" />";
+
+		for (int i = 0; i < info.numOutputs; ++i)
+			oss << "<Pin name=\"Signal Out\" direction=\"out\" datatype=\"float\" rate=\"audio\" />";
+
+		oss << "</Audio>";
+
+		// GUI.
+		oss << "<GUI graphicsApi=\"GmpiGui\" >";
+
+		// aeffect ptr first.
+		oss << "<Pin name=\"effectptr\" datatype=\"blob\" parameterId=\"" << controllerPointerParamId << "\" private=\"true\" />";
+
+		oss << "</GUI>\n</Plugin>\n";
+
+		const auto xml = oss.str();
+
+		returnXml->setData(xml.data(), (int32_t)xml.size());
 		return gmpi::ReturnCode::Ok;
 	}
 
 	return gmpi::ReturnCode::Fail;
 }
-
-#if 0
-
-gmpi::IString* returnXml{};
-
-if (MP_OK != iReturnXml->queryInterface(MP_IID_RETURNSTRING, reinterpret_cast<void**>(&returnXml)))
-{
-	return gmpi::MP_NOSUPPORT;
-}
-
-if (!scannedPlugins)
-{
-	loadPluginInfo();
-}
-
-const auto uuid = uuidFromWrapperID(uniqueId);
-
-std::string path;
-for (auto& p : plugins)
-{
-	if (p.uuid_ == uuid)
-	{
-		path = WStringToUtf8(p.shellPath_);
-		break;
-	}
-}
-
-std::string error;
-auto module = VST3::Hosting::Module::create(path, error);
-if (!module)
-{
-	// Could not create Module for file
-	return gmpi::MP_FAIL;
-}
-
-auto classID = VST3::UID::fromString(uuid);
-if (!classID)
-{
-	return gmpi::MP_FAIL;
-}
-
-auto factory = module->getFactory();
-const std::string xmlFull = XmlFromPlugin(factory, *classID);
-returnXml->setData(xmlFull.data(), (int32_t)xmlFull.size());
-return xmlFull.empty() ? gmpi::MP_FAIL : gmpi::MP_OK;
-
-return gmpi::MP_FAIL;
-
-#endif
 
 std::string VstFactory::uuidFromWrapperID(const char* uniqueId)
 {
@@ -206,9 +209,9 @@ std::string VstFactory::uuidFromWrapperID(const char* uniqueId)
 	return uniqueId + prefixLength;
 }
 
-vector< std::string >getSearchPaths()
+vector<std::string> getSearchPaths()
 {
-	vector< std::string >searchPaths;
+	vector<std::string> searchPaths;
 
 #ifdef _WIN32
 	// Use standard VST3 folder.
@@ -226,16 +229,6 @@ vector< std::string >getSearchPaths()
 	return searchPaths;
 }
 
-void VstFactory::ShallowScanVsts()
-{
-//	allPluginsXml = "<?xml version=\"1.0\" encoding=\"utf - 8\" ?>\n<PluginList>\n";
-
-	for (auto& itSp : getSearchPaths())
-		RecursiveScanVsts(itSp);
-
-//	allPluginsXml += "\n</PluginList>\n";
-}
-
 void VstFactory::ScanVsts()
 {
 	scannedPlugins = true;
@@ -243,37 +236,14 @@ void VstFactory::ScanVsts()
 	// Time to re-scan VSTs.
 	plugins.clear();
 	scannedFiles.clear();
-	duplicates.clear();
 
-	// Always add 'Info' plugin. xml must be continuous line, no line breaks.
-	{
-		ostringstream oss;
-		oss << "<Plugin id=\"" << INFO_PLUGIN_ID << "\" name=\"Wrapper Info\" category=\"VST3 Plugins\" >"
-			"<GUI graphicsApi=\"GmpiGui\"><Pin/></GUI>"
-			"</Plugin>\n";
-
-		plugins.push_back({ INFO_PLUGIN_ID, "Info", oss.str(), {} });
-	}
-	{
-		const auto xml =
-R"xml(
-<Plugin id="GMPI: VST3 Param Set" name="VST3 Param Set" category="VST3 Plugins">
-<Audio>
-<Pin name="Signal In" datatype="float" />
-<Pin name="Param Idx" datatype="int" default="0" />
-<Pin name="ParamBuss" datatype="midi" direction="out" />
-</Audio>
-</Plugin>
-)xml"; 
-		plugins.push_back({ PARAM_SET_PLUGIN_ID, "Info", xml, {} });
-	}
-
-	ShallowScanVsts();
+	for (auto& itSp : getSearchPaths())
+		ScanFolder(itSp);
 
 	savePluginInfo();
 }
 
-void VstFactory::RecursiveScanVsts(const std::string searchPath)
+void VstFactory::ScanFolder(const std::string searchPath)
 {
 	for (auto& p : std::filesystem::recursive_directory_iterator(searchPath))
 	{
@@ -306,7 +276,7 @@ struct backgroundData
 	const char* shellName;
 };
 
-void VstFactory::ScanDll(const std::string /*platform_string*/& path)
+void VstFactory::ScanDll(const std::string& path)
 {
 	if (scannedFiles[path] == 1)
 		return;
@@ -324,57 +294,37 @@ void VstFactory::ScanDll(const std::string /*platform_string*/& path)
 			return;
 		}
 
-		const char* category = "VST3 Plugins";
-		const bool isWavesShell = path.find("WaveShell") != std::string::npos;
-		if(isWavesShell)
-		{
-			auto lastSlash = path.find_last_of('/');
-			if(lastSlash == std::string::npos)
-			{
-				lastSlash = path.find_last_of('\\');
-			}
-			if(lastSlash == std::string::npos)
-			{
-				lastSlash = 0;
-			}
-
-			category = path.c_str() + lastSlash + 1;
-		}
-
 		auto factory = module->getFactory();
 		for (auto& classInfo : factory.classInfos())
 		{
 			if (classInfo.category() == kVstAudioEffectClass)
 			{
-//				AddPluginName(category, classInfo.ID().toString(), classInfo.name(), path); // a quick scan of name-only.
-
 				const auto uuid = classInfo.ID().toString();
 				const auto name = classInfo.name();
-				const auto xml = XmlFromPlugin(factory, classInfo.ID(), name);
 
-#if 0
-				// Plugin ID's must be unique. Skip multiple waveshells.
-				for (auto& p : plugins)
-				{
-					if (p.uuid_ == uuid)
-					{
-						ostringstream oss2;
-						oss2 << std::hex << uuid << ":" << p.name_ << ", " << name;
+				myPluginProvider plugProvider;
+				plugProvider.setup(factory, classInfo.ID());
 
-						duplicates.push_back(oss2.str());
-						return;
-					}
-				}
-				ostringstream oss;
-				oss <<
-					"<Plugin id=\"" << pluginIdPrefix << uuid << "\" name=\"" << name << "\" category=\"" << category << "/\" >"
-					"<Audio/>"
-					"<Controller/>"
-					"<GUI graphicsApi=\"GmpiGui\" />"
-					"</Plugin>\n";
-#endif
+				// No EditController found? (needed for allowing editor)
+				if (!plugProvider.controller)
+					return;
 
-				plugins.push_back({ uuid, name, xml, path });
+				int numInputs{};
+				int numOutputs{};
+				int numMidiInputs{};
+
+				BusInfo busInfo = {};
+				const int busIndex{};
+				if (plugProvider.component->getBusInfo(kAudio, kInput, busIndex, busInfo) == kResultTrue)
+					numInputs = busInfo.channelCount;
+
+				if (plugProvider.component->getBusInfo(kAudio, kOutput, busIndex, busInfo) == kResultTrue)
+					numOutputs = busInfo.channelCount;
+
+				if (plugProvider.component->getBusInfo(kEvent, kInput, busIndex, busInfo) == kResultTrue)
+					numMidiInputs = busInfo.channelCount;
+
+				plugins.push_back({ uuid, name, path, numInputs, numOutputs, numMidiInputs });
 			}
 		}
 	}
@@ -382,156 +332,6 @@ void VstFactory::ScanDll(const std::string /*platform_string*/& path)
 	{
 		return;
 	}
-}
-
-std::string VstFactory::XmlFromPlugin(VST3::Hosting::PluginFactory& factory, const VST3::UID& classId, std::string name)
-{
-	myPluginProvider plugProvider;
-	plugProvider.setup(factory, classId);
-
-	if (!plugProvider.controller)
-	{
-		//No EditController found (needed for allowing editor)
-		return {};
-	}
-
-	// TODO!!!: Hide and handle MIDI CC dummy parameters
-#if 0
-	// Gather parameter names.
-	vector<string> paramNames;
-	const auto parameterCount = plugProvider.controller->getParameterCount();
-	for(int i = 0; i < parameterCount; ++i)
-	{
-		Steinberg::Vst::ParameterInfo info{};
-		plugProvider.controller->getParameterInfo(i, info);
-
-		paramNames.push_back(WStringToUtf8(info.title));
-	}
-#endif
-
-	auto classIdString = classId.toString();
-
-	//std::string name;
-	//for (auto& p : plugins)
-	//{
-	//	if (p.uuid_ == classIdString)
-	//	{
-	//		name = p.name_;
-	//		break;
-	//	}
-	//}
-
-	ostringstream oss;
-	oss << "<Plugin id=\"" << pluginIdPrefix << classIdString << "\" name=\"" << name << "\" category=\"VST3 Plugins\" >";
-
-	// Parameter to store state.
-	oss << "<Parameters>";
-
-	int i = 0;
-#if 0
-	for (auto name : paramNames)
-	{
-		oss << "<Parameter id=\"" << std::dec << i << "\" name=\"" << name << "\" datatype=\"float\" metadata=\",,1,0\" />";
-		++i;
-	}
-#endif
-
-	// next-to last parameter stores state from getChunk() / setChunk().
-	oss << "<Parameter id=\"" << std::dec << i << "\" name=\"chunk\" ignorePatchChange=\"true\" datatype=\"blob\" />";
-	++i;
-
-	// Provide parameter to share pointer to plugin.
-	oss << "<Parameter id=\"" << std::dec << i << "\" name=\"effectptr\" ignorePatchChange=\"true\" persistant=\"false\" private=\"true\" datatype=\"blob\" />";
-
-	oss << "</Parameters>";
-
-	// Controller.
-	oss << "<Controller/>";
-
-	// instansiate Processor
-	if(!plugProvider.component)
-	{
-		// No EditController found (needed for allowing editor)
-		return {};
-	}
-
-	int numInputs{};
-	int numOutputs{};
-	int numMidiInputs{};
-
-	BusInfo busInfo = {};
-	const int busIndex{};
-	if (plugProvider.component->getBusInfo (kAudio, kInput, busIndex, busInfo) == kResultTrue)
-	{
-		numInputs = busInfo.channelCount;
-	}
-
-	if(plugProvider.component->getBusInfo(kAudio, kOutput, busIndex, busInfo) == kResultTrue)
-	{
-		numOutputs = busInfo.channelCount;
-	}
-
-	if(plugProvider.component->getBusInfo(kEvent, kInput, busIndex, busInfo) == kResultTrue)
-	{
-		numMidiInputs = busInfo.channelCount;
-	}
-
-	// Audio.
-	oss << "<Audio>";
-
-	// Add Power and Tempo pins.
-	// TODO !!! revise these, need auto sleep? it was a bit buggy i think
-//		<Pin name = "Auto Sleep" datatype = "bool" isMinimised="true" />
-
-oss << R"XML(
-	<Pin name = "Power/Bypass" datatype = "bool" default = "1" />
-	<Pin name = "Host BPM" datatype = "float" hostConnect = "Time/BPM" />
-	<Pin name = "Host SP" datatype = "float" hostConnect = "Time/SongPosition" />
-	<Pin name = "Host Transport" datatype = "bool" hostConnect = "Time/TransportPlaying" />
-	<Pin name = "Numerator" datatype = "int" hostConnect = "Time/Timesignature/Numerator" />
-	<Pin name = "Denominator" datatype = "int" hostConnect = "Time/Timesignature/Denominator" />
-	<Pin name = "Host Bar Start" datatype = "float" hostConnect = "Time/BarStartPosition" />
-	<Pin datatype = "int" hostConnect = "Processor/OfflineRenderMode" />
-)XML";
-
-	auto controllerPointerParamId = i;
-	oss << "<Pin name=\"effectptr\" datatype=\"blob\" parameterId=\"" << controllerPointerParamId << "\" private=\"true\" />";
-
-	if(numMidiInputs)
-	{
-		oss << "<Pin name=\"MIDI In\" direction=\"in\" datatype=\"midi\" />";
-	}
-
-	// Direct parameter access via MIDI
-	oss << "<Pin name=\"ParamBuss\" direction=\"in\" datatype=\"midi\" />";
-
-	for (int i = 0; i < numInputs; ++i)
-		oss << "<Pin name=\"Signal In\" datatype=\"float\" rate=\"audio\" />";
-
-	for (int i = 0; i < numOutputs; ++i)
-		oss << "<Pin name=\"Signal Out\" direction=\"out\" datatype=\"float\" rate=\"audio\" />";
-
-#if 0
-	// DSP pins for receiving normalised parameter values from GUI.
-	for(int i = 0; i < parameterCount; ++i)
-	{
-		oss << "<Pin datatype=\"float\" parameterId=\"" << i << "\" />";
-	}
-#endif
-
-	oss << "</Audio>";
-
-	// GUI.
-	oss << "<GUI graphicsApi=\"GmpiGui\" >";
-
-	// aeffect ptr first.
-	oss << "<Pin name=\"effectptr\" datatype=\"blob\" parameterId=\"" << controllerPointerParamId << "\" private=\"true\" />";
-
-	oss << "</GUI>";
-
-	oss << "</Plugin>\n";
-
-	return oss.str();
 }
 
 // Determine settings file: C:\Users\Jeff\AppData\Local\SeVst3Wrapper\ScannedPlugins.xml
@@ -559,51 +359,6 @@ std::wstring VstFactory::getSettingFilePath()
 #endif
 }
 
-std::string VstFactory::getDiagnostics()
-{
-	std::ostringstream oss;
-/* todo
-	if (pluginIdMap.empty())
-	{
-		oss << "Can't locate *WaveShell*.*\nSearched:\n";
-
-		auto searchPaths = getSearchPaths();
-		for (auto path : searchPaths)
-		{
-			oss << WStringToUtf8(path) << "\n";
-		}
-	}
-	else
-	{
-		oss << "WaveShells located:";
-		bool first = true;
-		for (auto& it : pluginIdMap)
-		{
-			if (!first)
-			{
-				oss << ", ";
-			}
-			oss << WStringToUtf8(it.second);
-			first = false;
-		}
-		oss << "\n";
-
-		oss << plugins.size() - 1 << " Waves plugins available.\n\n";
-
-		if (!duplicates.empty())
-		{
-			oss << "Skiped Duplicates:\n";
-			for (auto s : duplicates)
-			{
-				oss << s << "\n";
-			}
-		}
-	}
-*/
-//	oss << "Can't open VST Plugin. (not a vst plugin). (";
-	return oss.str();
-}
-
 void VstFactory::savePluginInfo()
 {
 #if defined(_WIN32)
@@ -612,13 +367,12 @@ void VstFactory::savePluginInfo()
 	{
 		for( auto& p : plugins )
 		{
-			if (p.shellPath_.empty())
-				continue;
-
-			myfile << p.name_ << "\n";
-			myfile << p.uuid_ << "\n";
-//			myfile << p.xmlBrief_ << "\n";
-			myfile << p.shellPath_ << "\n";
+			myfile << p.name << "\n";
+			myfile << p.uuid << "\n";
+			myfile << p.shellPath << "\n";
+			myfile << p.numInputs << "\n";
+			myfile << p.numOutputs << "\n";
+			myfile << p.numMidiInputs << "\n";
 		}
 		myfile.close();
 	}
@@ -627,29 +381,40 @@ void VstFactory::savePluginInfo()
 
 void VstFactory::loadPluginInfo()
 {
+	if (scannedPlugins)
+		return;
+
 #if defined(_WIN32)
-#if 0 // for now
 	ifstream myfile(getSettingFilePath());
 	if( myfile.is_open() )
 	{
-		string name, id, xml, path;
+		string name, id, path;
 		std::getline(myfile, name);
 		while( !myfile.eof() )
 		{
 			std::getline(myfile, id);
-//			std::getline(myfile, xml);
 			std::getline(myfile, path);
-			plugins.push_back({ id, name, xml, path });
+
+			string temp;
+			char* end{};
+			std::getline(myfile, temp);
+			const int numInputs = strtol(temp.c_str(), &end, 10);
+
+			std::getline(myfile, temp);
+			const int numOutputs = strtol(temp.c_str(), &end, 10);
+
+			std::getline(myfile, temp);
+			const int numMidiInputs = strtol(temp.c_str(), &end, 10);
+
+			plugins.push_back({ id, name, path, numInputs, numOutputs, numMidiInputs });
 
 			// next plugin.
 			std::getline(myfile, name);
 		}
 		myfile.close();
 		scannedPlugins = true;
-		ShallowScanVsts();
 	}
 	else
-#endif
 	{
 		ScanVsts();
 	}

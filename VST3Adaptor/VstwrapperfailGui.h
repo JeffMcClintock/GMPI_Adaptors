@@ -11,6 +11,10 @@ struct VstwrapperfailGui final : public PluginEditor
 {
 	std::string errorMsg;
 
+	VstwrapperfailGui(std::string msg) : errorMsg(msg)
+	{
+	}
+
 	ReturnCode render(gmpi::drawing::api::IDeviceContext* drawingContext) override
 	{
 		Graphics g(drawingContext);
