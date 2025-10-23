@@ -1,5 +1,6 @@
 #include "./ProcessorWrapper.h"
 #include <algorithm>
+#include "Extensions/PinCount.h"
 
 #define VST3_USE_MIDI_EXTENSION 0
 
@@ -57,7 +58,7 @@ void ProcessorWrapper::process(int32_t count, const gmpi::api::Event* events)
 	(this->*(currentVstSubProcess))(count, events);
 }
 
-struct PinSink : public gmpi::api::IProcessorPinsCallback
+struct PinSink : public synthedit::IProcessorPinsCallback
 {
 	std::function<void(gmpi::PinDirection, gmpi::PinDatatype)> callback;
 
@@ -70,7 +71,7 @@ struct PinSink : public gmpi::api::IProcessorPinsCallback
 		return gmpi::ReturnCode::Ok;
 	}
 
-	GMPI_QUERYINTERFACE_METHOD(gmpi::api::IProcessorPinsCallback);
+	GMPI_QUERYINTERFACE_METHOD(synthedit::IProcessorPinsCallback);
 	GMPI_REFCOUNT_NO_DELETE
 };
 
@@ -92,7 +93,8 @@ gmpi::ReturnCode ProcessorWrapper::open(gmpi::api::IUnknown* phost)
 		}
 	);
 
-	host->listPins(&sink);
+	auto synthEditExtension = host.as<synthedit::IPinCount>();
+	synthEditExtension->listPins(&sink);
 
 	// Setup IO.
 	if(pinlist.empty())

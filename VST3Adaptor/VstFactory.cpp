@@ -313,7 +313,7 @@ void VstFactory::ScanDll(const std::string /*platform_string*/& path)
 
 	scannedFiles[path] = 1;
 
-	VST3::Hosting::Module::Ptr module = {};
+	VST3::Hosting::Module::Ptr module;
 	try
 	{
 		std::string error;
