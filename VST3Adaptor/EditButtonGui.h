@@ -34,7 +34,6 @@ struct EditButtonGui final : public PluginEditor
 		auto brush = g.createSolidColorBrush(0x969696u);
 		g.drawRectangle(bounds, brush);
 
-		// Current selection text.
 		brush.setColor(0x000032u);
 
 		std::string txt = "EDIT";
@@ -46,7 +45,6 @@ struct EditButtonGui final : public PluginEditor
 		}
 
 		const auto textRect = inflateRect(bounds, -2);
-
 		auto textFormat = g.getFactory().createTextFormat();
 		g.drawTextU(txt, textFormat, textRect, brush);
 
@@ -92,52 +90,8 @@ struct EditButtonGui final : public PluginEditor
 
 	ReturnCode measure(const gmpi::drawing::Size* availableSize, gmpi::drawing::Size* returnDesiredSize) override
 	{
-		//auto font = getTextFormat();
-		//auto s = getTextFormat().GetTextExtentU("XXXEDITXXX");
-
 		returnDesiredSize->width = 100;
 		returnDesiredSize->height = 30;
-
-		return ReturnCode::Ok;
-	}
-
-	gmpi::ReturnCode populateContextMenu(gmpi::drawing::Point point, gmpi::api::IUnknown* contextMenuItemsSink) override
-	{
-#if 0
-		gmpi::IMpContextItemSink* sink;
-		contextMenuItemsSink->queryInterface(gmpi::MP_IID_CONTEXT_ITEMS_SINK, (void**)&sink);
-		std::string info("WavesShell: ");
-		//	info += WStringToUtf8(GetVstFactory()->getWavesShellLocation());
-
-		sink->AddItem(info.c_str(), 0);
-
-		{
-			char buffer[50] = "";
-			sprintf(buffer, "%s", shellPluginId_.c_str());
-
-			std::string info2("Shell ID: ");
-			info2 += buffer;
-			sink->AddItem(info2.c_str(), 1);
-		}
-#endif
 		return ReturnCode::Ok;
 	}
 };
-
-//GmpiDrawing::TextFormat& EditButtonGui::getTextFormat()
-//{
-//	if( dtextFormat.isNull() )
-//	{
-//		const float fontSize = 14;
-//		dtextFormat = GetGraphicsFactory().CreateTextFormat(fontSize);
-//		dtextFormat.SetTextAlignment(GmpiDrawing::TextAlignment::Leading); // Left
-//		dtextFormat.SetParagraphAlignment(GmpiDrawing::ParagraphAlignment::Center);
-//	}
-//
-//	return dtextFormat;
-//}
-
-
-
-
-

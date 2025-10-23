@@ -1,13 +1,5 @@
 #include "./ProcessorWrapper.h"
-//#include "../shared/xplatform.h"
 #include <algorithm>
-#include "./MyViewStream.h"
-
-#ifdef CANCELLATION_TEST_ENABLE2
-#include <iostream>
-#include <fstream>
-#include <iomanip>
-#endif
 
 #define VST3_USE_MIDI_EXTENSION 0
 
@@ -106,8 +98,6 @@ gmpi::ReturnCode ProcessorWrapper::open(gmpi::api::IUnknown* phost)
 	if(pinlist.empty())
 		return gmpi::ReturnCode::Fail;
 
-	std::vector<int> midiPinsIdxs;
-
 	for (int idx = 0; idx < pinlist.size() ; idx++)
 	{
 		auto& [direction, datatype] = pinlist[idx];
@@ -116,32 +106,8 @@ gmpi::ReturnCode ProcessorWrapper::open(gmpi::api::IUnknown* phost)
 		{
 			switch(datatype)
 			{
-#if 0
-			case gmpi::PinDatatype::Bool:
-				init(idx++, pinOnOffSwitch);
-				r = it->next();
-				init(idx++, pinHostBpm);
-				r = it->next();
-				init(idx++, pinHostSongPosition);
-				r = it->next();
-				init(idx++, pinHostTransport);
-				r = it->next();
-				init(idx++, pinNumerator);
-				r = it->next();
-				init(idx++, pinDenominator);
-				r = it->next();
-				init(idx++, pinHostBarStart);
-				r = it->next();
-				init(idx, pinOfflineRenderMode);
-				break;
-
-
-			case gmpi::PinDatatype::Blob:
-				init(idx, pinControllerPointer);
-				break;
-#endif
 			case gmpi::PinDatatype::Midi:
-				midiPinsIdxs.push_back(idx);
+				parameterAccessPinIndex = idx;
 				break;
 
 			case gmpi::PinDatatype::Audio:
@@ -159,13 +125,6 @@ gmpi::ReturnCode ProcessorWrapper::open(gmpi::api::IUnknown* phost)
 			init(*(AudioOuts.back()));
 		}
 	}
-
-	if(midiPinsIdxs.size() == 2)
-	{
-		// TODO		init(midiPinsIdxs.front(), pinMidi);
-	}
-	parameterAccessPinIndex = midiPinsIdxs.back();
-// TODO	init(parameterAccessPinIndex, pinParameterAccess);
 
 	for (auto it = AudioOuts.begin(); it != AudioOuts.end(); ++it)
 	{
@@ -576,72 +535,3 @@ void ProcessorWrapper::onSetPins(void)
 		targetLevel = pinOnOffSwitch.getValue() ? 1.0f : 0.0f;
     }
 }
-
-#ifdef CANCELLATION_TEST_ENABLE2
-void ProcessorWrapper::debugDumpPresetToFile()
-{
-	MyBufferStream stream;
-
-	component_->getState(&stream);
-
-    auto data = (const unsigned char*)stream.buffer_.data();
-	auto size = stream.buffer_.size();
-
-	std::string outputFolder;
-	outputFolder = "C:/temp/cancellation/" CANCELLATION_BRANCH "/preset_";
-    int32_t handle;
-    this->getHost()->getHandle(handle);
-	outputFolder += std::to_string(handle);
-	outputFolder += ".txt";
-
-//		CreateFolderRecursive(Utf8ToWstring(outputFolder));
-	std::ofstream presetEscaped;
-	presetEscaped.open (outputFolder.c_str());
-
-    {
-        const int linelen = 100;
-        bool wasOctal = false;
-
-        presetEscaped << '"';
-        int totallen = 0;
-        for (int i = 0; i < size; ++i)
-        {
-            if (data[i] == '\"' || data[i] == '\\')
-            {
-                presetEscaped << '\\' << data[i];
-                totallen += 2;
-                wasOctal = false;
-}
-            else if (isalnum(data[i]) || ispunct(data[i]) || data[i] == ' ')
-            {
-
-                // Warning C4125 - decimal digit terminates octal escape sequence. i.e. number right after octal sequence.
-                if (wasOctal && isdigit(data[i]))
-                {
-                    presetEscaped << "\"\""; // place two quotes to split string.
-                }
-
-                presetEscaped << data[i];
-                totallen++;
-                wasOctal = false;
-            }
-            else
-            {
-                // non-printable. use octal escape sequence.
-                presetEscaped << "\\" << std::oct << std::setfill('0') << std::setw(3) << (int)data[i];
-                totallen += 4;
-                wasOctal = true;
-            }
-            if (totallen >= linelen || data[i] == '\n')
-            {
-                presetEscaped << "\"\n"
-                                 "\t\t\"";
-                totallen = 0;
-                wasOctal = false;
-            }
-        }
-
-        presetEscaped << '"';
-    }
-}
-#endif

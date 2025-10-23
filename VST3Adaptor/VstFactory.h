@@ -1,8 +1,4 @@
 #pragma once
-/*
-#include "VstFactory.h"
-*/
-
 #include <map>
 #include <unordered_map>
 #include <vector>
@@ -32,9 +28,6 @@ class VstFactory : public gmpi::api::IPluginFactory
 	std::unordered_map<std::string, int> scannedFiles;
 	std::vector< std::string > duplicates;
 
-//	std::string allPluginsXml;
-
-
 	bool scannedPlugins = {};
 	static const char* pluginIdPrefix;
 	Steinberg::Vst::HostApplication pluginContext;
@@ -44,33 +37,7 @@ public:
 
 	gmpi::ReturnCode createInstance(const char* id, gmpi::api::PluginSubtype subtype, void** returnInterface) override;
 	gmpi::ReturnCode getPluginInformation(int32_t index, gmpi::api::IString* returnXml) override;
-
-#if 0
-	/* IMpUnknown methods */
-	GMPI_QUERYINTERFACE_METHOD(gmpi::api::IPluginFactory);
-	GMPI_REFCOUNT_NO_DELETE
-
-	/* IMpFactory methods */
-	virtual int32_t MP_STDCALL createInstance(
-		const wchar_t* uniqueId,
-		int32_t subType,
-		IMpUnknown* host,
-		void** returnInterface);
-
-	virtual int32_t MP_STDCALL createInstance2(
-		const wchar_t* uniqueId,
-		int32_t subType,
-		void** returnInterface);
-
-	virtual int32_t MP_STDCALL getSdkInformation(int32_t& returnSdkVersion, int32_t maxChars, wchar_t* returnCompilerInformation);
-
-	// IMpShellFactory: Query a plugin's info.
-	virtual int32_t MP_STDCALL getPluginIdentification(int32_t index, IMpUnknown* iReturnXml) override;	// ID and name only.
-	std::string uuidFromWrapperID(const wchar_t* uniqueId);
-	virtual int32_t MP_STDCALL getPluginInformation(const wchar_t* iid, IMpUnknown* iReturnXml) override;		// Full pin details.
-#endif
 	std::string uuidFromWrapperID(const char* uniqueId);
-
 	std::string XmlFromPlugin(VST3::Hosting::PluginFactory& factory, const VST3::UID& classId, std::string name);
 	std::string getDiagnostics();
 

@@ -2,23 +2,15 @@
 
 #include <memory>
 #include <unordered_map>
-//#include "../se_sdk3/mp_sdk_audio.h"
-//#include "../se_sdk3/mp_midi.h"
-//#include "../shared/xplatform.h"
 #include "Core/Processor.h"
 #include "base/source/fobject.h"
 #include "pluginterfaces/vst/ivstevents.h"
 #include "pluginterfaces/vst/ivstprocesscontext.h"
 #include "pluginterfaces/vst/ivstaudioprocessor.h"
-#include "public.sdk/source/vst/vstaudioeffect.h"
+//#include "public.sdk/source/vst/vstaudioeffect.h"
 #include "public.sdk/source/vst/hosting/processdata.h"
 #include "pluginterfaces/vst/ivstparameterchanges.h"
-
 #include "./ControllerWrapper.h"
-
-#if defined(SE_TARGET_WAVES)
-#include "cancellation.h"
-#endif
 
 struct myParamValueQueue : public Steinberg::FObject, public Steinberg::Vst::IParamValueQueue
 {
@@ -412,23 +404,8 @@ public:
 private:
 	void addParameterEvent(int clock, int index, float value);
 
-	//gmpi::MidiInPin pinMidi;
-	//gmpi::MidiInPin pinParameterAccess;
-
 	std::vector< std::unique_ptr<gmpi::AudioInPin> > AudioIns;
 	std::vector< std::unique_ptr<gmpi::AudioOutPin> > AudioOuts;
-
-	//gmpi::BoolInPin pinOnOffSwitch;
-	//gmpi::BlobInPin pinControllerPointer;
-
-	// Musical time
-	//gmpi::FloatInPin pinHostBpm;
-	//gmpi::FloatInPin pinHostSongPosition;
-	//gmpi::IntInPin pinNumerator;
-	//gmpi::IntInPin pinDenominator;
-	//gmpi::BoolInPin pinHostTransport;
-	//gmpi::FloatInPin pinHostBarStart;
-	//gmpi::IntInPin pinOfflineRenderMode;
 
 	int firstParameterPinIndex = {};
 	int parameterAccessPinIndex = {};
@@ -447,13 +424,6 @@ class Vst3ParamSet : public gmpi::Processor
 	gmpi::MidiOutPin pinParameterAccessOut;
 
 public:
-	Vst3ParamSet()
-	{
-		//initializePin(pinFloatIn);
-		//initializePin(pinParamIdx);
-		//initializePin(pinParameterAccessOut);
-	}
-
 	void sendPinValueAsMidi()
 	{
 		const int paramId = pinParamIdx.getValue();
@@ -471,9 +441,6 @@ public:
 
 	void onSetPins(void) override
 	{
-		if (pinFloatIn.isUpdated())
-		{
-			sendPinValueAsMidi();
-		}
+		sendPinValueAsMidi();
 	}
 };
