@@ -4,7 +4,7 @@
 #include <vector>
 
 #include "public.sdk/source/vst/hosting/module.h"
-#include "public.sdk/source/vst/hosting\hostclasses.h"
+#include "public.sdk/source/vst/hosting/hostclasses.h"
 
 #include "GmpiApiCommon.h"
 #include "RefCountMacros.h"
