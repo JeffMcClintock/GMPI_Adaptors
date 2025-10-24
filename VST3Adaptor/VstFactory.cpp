@@ -222,8 +222,8 @@ vector<std::string> getSearchPaths()
 	// "C:\Program Files (x86)\Common Files\VST3
 	searchPaths.push_back(commonFilesFolder + "\\VST3");
 #else
-    searchPaths.push_back(L"/Library/Audio/Plug-ins/VST3");
-    searchPaths.push_back(L"~/Library/Audio/Plug-ins/VST3");
+    searchPaths.push_back("/Library/Audio/Plug-ins/VST3");
+    searchPaths.push_back("~/Library/Audio/Plug-ins/VST3");
 #endif
     
 	return searchPaths;
