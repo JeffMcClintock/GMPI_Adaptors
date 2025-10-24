@@ -1,5 +1,3 @@
-#define WIN32_LEAN_AND_MEAN
-#include <windows.h>
 #include "WindowManager.h"
 #include "base/source/fdebug.h"
 

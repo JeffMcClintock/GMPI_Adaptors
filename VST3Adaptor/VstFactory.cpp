@@ -163,7 +163,7 @@ R"xml(
 		auto controllerPointerParamId = i;
 		oss << "<Pin name=\"effectptr\" datatype=\"blob\" parameterId=\"" << controllerPointerParamId << "\" private=\"true\" />";
 
-		if (info.numMidiInputs)
+//		if (info.numMidiInputs)
 		{
 			oss << "<Pin name=\"MIDI In\" direction=\"in\" datatype=\"midi\" />";
 		}
