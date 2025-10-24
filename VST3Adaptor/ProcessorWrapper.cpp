@@ -203,7 +203,9 @@ void ProcessorWrapper::initVst()
 		delay.resize(bypassDelaysize);
 	}
 
+#ifdef _WIN32
 	_RPT1(0, "LATENCY INITAL: %d\n", latency);
+#endif
 // TODO	host.SetLatency(latency);
 
 	currentVstSubProcess = &ProcessorWrapper::subProcess2<ST_PROCESS>;

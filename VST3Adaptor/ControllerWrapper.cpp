@@ -323,7 +323,9 @@ gmpi::ReturnCode ControllerWrapper::LoadPlugin(std::string path, std::string uui
 	if(!dll)
 	{
 		// Could not create Module for file
+#ifdef _WIN32
         _RPT1(0, "Failed to load VST3 child plugin. UUID:%s\n", uuid.c_str());
+#endif
         return gmpi::ReturnCode::Fail;
 	}
 
@@ -432,7 +434,9 @@ tresult VstComponentHandler::restartComponent (int32 flags)
 
 	if ((kIoChanged | kLatencyChanged | kReloadComponent) & flags)
 	{
+#ifdef _WIN32
 		_RPT0(0, "restartComponent\n");
+#endif
 // TODO??		controller_->host_->setLatency(-1);
 	}
 
