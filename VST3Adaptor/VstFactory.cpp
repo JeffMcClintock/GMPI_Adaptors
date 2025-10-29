@@ -61,7 +61,7 @@ gmpi::ReturnCode VstFactory::createInstance(const char* uniqueId, gmpi::api::Plu
 				break;
 
 			case (int) gmpi::api::PluginSubtype::Controller:
-				*returnInterface = static_cast<gmpi::api::IController_x*>(new ControllerWrapper(pluginInfo.shellPath.c_str(), vstUniqueId));
+				*returnInterface = static_cast<gmpi::api::IController*>(new ControllerWrapper(pluginInfo.shellPath.c_str(), vstUniqueId));
 				break;
 
 			case (int) gmpi::api::PluginSubtype::Editor:
@@ -420,36 +420,6 @@ void VstFactory::loadPluginInfo()
 	}
 #endif
 }
-
-#ifdef _WIN32
-
-// Define the entry point for the DLL
-#ifdef _MANAGED
-#pragma managed(push, off)
-#endif
-
-// temp. testing with MFC included.
-#ifndef __AFXWIN_H__
-
-// store dll instance handle, needed when creating windows and window classes.
-HMODULE dllInstanceHandle;
-
-extern "C"
-__declspec (dllexport)
-BOOL APIENTRY DllMain(HMODULE hModule,
-	DWORD  ul_reason_for_call,
-	LPVOID lpReserved)
-{
-	dllInstanceHandle = hModule;
-	return TRUE;
-}
-#endif
-
-#ifdef _MANAGED
-#pragma managed(pop)
-#endif
-
-#endif // _WIN32
 
 //---------------FACTORY --------------------
 

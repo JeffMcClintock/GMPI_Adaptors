@@ -101,7 +101,7 @@ void ControllerWrapper::serviceQueue()
 
 // setting state of wrapper, which will pass on the state to the VST3 plugin
 //int32_t ControllerWrapper::setParameter(int32_t parameterHandle, int32_t fieldId, int32_t /*voice*/, const void* data, int32_t size)
-gmpi::ReturnCode ControllerWrapper::setParameter(int32_t parameterHandle, gmpi::Field fieldId, int32_t voice, int32_t size, const uint8_t* data)
+gmpi::ReturnCode ControllerWrapper::setParameter(int32_t parameterIndex, gmpi::Field fieldId, int32_t voice, int32_t size, const uint8_t* data)
 {
 	// Avoid altering plugin state until we can determine if we are restoring a saved preset, or keeping init preset.
 	if(!isOpen)
@@ -109,21 +109,13 @@ gmpi::ReturnCode ControllerWrapper::setParameter(int32_t parameterHandle, gmpi::
 
 	if(!inhibitFeedback && fieldId == gmpi::Field::Value)
 	{
-		/*
-		int32_t moduleHandle = -1;
-		int32_t moduleParameterId = -1;
-		host_->getParameterModuleAndParamId(parameterHandle, &moduleHandle, &moduleParameterId);
-		*/
-
-const auto moduleParameterId = parameterHandle; // TODO!!! is this a posible simplification???
-
 		if(!plugin->controller || !plugin->component)
 		{
 			return gmpi::ReturnCode::Fail;
 		}
 
 		const auto paramId = 0;
-		if(paramId != moduleParameterId)
+		if(paramId != parameterIndex)
 		{
 			return gmpi::ReturnCode::Ok;
 		}
@@ -167,8 +159,7 @@ const auto moduleParameterId = parameterHandle; // TODO!!! is this a posible sim
 	return gmpi::ReturnCode::Ok;
 }
 
-#if 0
-int32_t ControllerWrapper::preSaveState()
+gmpi::ReturnCode ControllerWrapper::syncState() // to host.
 {
 	inhibitFeedback = true;
 
@@ -218,12 +209,13 @@ int32_t ControllerWrapper::preSaveState()
 #endif
 
 		const int voiceId = 0;
+
 		host_->setParameter(
-			host_->getParameterHandle(handle_, chunkParamId),
+			chunkParamId,
 			gmpi::Field::Value,
 			voiceId,
-			(char*)stream.buffer_.data(),
-			(int32_t) stream.buffer_.size()
+			(int32_t) stream.buffer_.size(),
+			stream.buffer_.data()
 		);
 	}
 
@@ -233,15 +225,13 @@ int32_t ControllerWrapper::preSaveState()
 	return gmpi::ReturnCode::Ok;
 }
 
-#endif
-
 //int32_t ControllerWrapper::setHost(gmpi::IMpUnknown* host)
 gmpi::ReturnCode ControllerWrapper::initialize(gmpi::api::IUnknown* host, int32_t handle)
 {
 	handle_ = handle;
 
 	gmpi::shared_ptr<gmpi::api::IUnknown> unknown(host);
-	host_ = unknown.as<gmpi::api::IControllerHost_x>();
+	host_ = unknown.as<gmpi::api::IControllerHost>();
 
 	if( !host_ )
 		return gmpi::ReturnCode::NoSupport; //  host Interfaces not supported
@@ -279,10 +269,7 @@ gmpi::ReturnCode ControllerWrapper::open()
 	const int voiceId = 0;
 	auto me = this;
 
-	int32_t parameterHandle{};
-	host_->getParameterHandle(controllerPtrParamId, parameterHandle);
-	// TODO host to just take parameter id directly, why convert to SE's handle at all here?
-	host_->setParameter(parameterHandle, gmpi::Field::Value, voiceId, sizeof(me), (const uint8_t*) &me);
+	host_->setParameter(controllerPtrParamId, gmpi::Field::Value, voiceId, sizeof(me), (const uint8_t*) &me);
 
 	{
 		// always have to pass initial state from processor to controller.

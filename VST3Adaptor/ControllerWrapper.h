@@ -27,7 +27,7 @@ namespace Vst
 class VstComponentHandler;
 class myPluginProvider;
 
-class ControllerWrapper : public gmpi::api::IController_x, public gmpi::TimerClient
+class ControllerWrapper : public gmpi::api::IController, public gmpi::TimerClient
 {
 protected:
 	static const int chunkParamId = 0;
@@ -62,7 +62,7 @@ public:
 	std::unique_ptr<myPluginProvider> plugin;
 	int32_t handle_ = -1;
 	bool stateDirty = {};
-	gmpi::api::IControllerHost_x* host_ = {};
+	gmpi::api::IControllerHost* host_ = {};
 
 	ControllerWrapper(const char* filename, const std::string& uuid);
 	~ControllerWrapper();
@@ -74,6 +74,8 @@ public:
 
 	// IController_x
 	gmpi::ReturnCode initialize(gmpi::api::IUnknown* host, int32_t handle) override;
+	gmpi::ReturnCode syncState() override;
+
 	gmpi::ReturnCode open();
 
 #if 0
@@ -107,7 +109,7 @@ public:
 	gmpi::ReturnCode registerProcessor(Steinberg::Vst::IComponent**, Steinberg::Vst::IAudioProcessor**);
 	void setParameterFromEditor(uint32_t paramId, double valueNormalized);
 
-	GMPI_QUERYINTERFACE_METHOD(gmpi::api::IController_x)
+	GMPI_QUERYINTERFACE_METHOD(gmpi::api::IController)
 	GMPI_REFCOUNT;
 };
 
