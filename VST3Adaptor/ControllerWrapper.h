@@ -70,7 +70,7 @@ public:
 	void setParameterFromProcessorUnsafe(uint32_t paramId, double valueNormalized);
 
 	// IParameterObserver
-	gmpi::ReturnCode setParameter(int32_t parameterHandle, gmpi::Field fieldId, int32_t voice, int32_t size, const uint8_t* data) override;
+	gmpi::ReturnCode setParameter(int32_t parameterIndex, gmpi::Field fieldId, int32_t voice, int32_t size, const uint8_t* data) override;
 
 	// IController_x
 	gmpi::ReturnCode initialize(gmpi::api::IUnknown* host, int32_t handle) override;
