@@ -173,15 +173,15 @@ class ProcessorWrapper : public gmpi::Processor
 	void debugDumpPresetToFile();
 #endif
 	enum { ST_PROCESS, ST_PRIME_BUFFERS, ST_FADING, ST_BYPASS };
-	gmpi::midi_2_0::MidiConverter2 midiConverter;
-	gmpi::midi_2_0::MidiConverter1 midiConverter_1_0;
+	gmpi::midi::MidiConverter2 midiConverter;
+	gmpi::midi::MidiConverter1 midiConverter_1_0;
 
 public:
 	ProcessorWrapper();
 	~ProcessorWrapper();
 
 	void onMidiMessage(int timeDelta, int pin, std::span<const uint8_t> midiMessage);
-	void onMidi2Message(const gmpi::midi::message_view msg, int timestamp);
+	void onMidi2Message(const gmpi::midi2::message_view msg, int timestamp);
 	void ProcessEvents(int32_t count, const gmpi::api::Event* events);
 	void process(int32_t count, const gmpi::api::Event* events) override;
 
@@ -429,6 +429,7 @@ public:
 		const int paramId = pinParamIdx.getValue();
         assert(paramId < 256);
 
+		/* TODO
 		// Send MIDI HD-Protocol Note Expression message. key is paramId, value is normalised cast to int32.
 		GmpiMidiHdProtocol::Midi2 msg;
 		GmpiMidiHdProtocol::setMidiMessage(msg, GmpiMidi::MIDI_ControlChange, 0, paramId, 0);
@@ -437,6 +438,7 @@ public:
         msg.value = *(int32_t*) &normalized;
 
 		pinParameterAccessOut.send(msg.data(), msg.size(), getBlockPosition());// + paramId);
+		*/
 	}
 
 	void onSetPins(void) override

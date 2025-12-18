@@ -19,7 +19,7 @@ ProcessorWrapper::ProcessorWrapper() :
 	,midiConverter_1_0(nullptr)
 	,midiConverter(
 		// provide a lambda to accept converted MIDI 2.0 messages
-		[this](const midi::message_view& msg, int offset)
+		[this](const midi2::message_view& msg, int offset)
 		{
 			onMidi2Message(msg, offset);
 		}
@@ -248,12 +248,12 @@ void ProcessorWrapper::onMidiMessage(int timeDelta, int pin, std::span<const uin
 	midiConverter.processMidi(midiMessage, timeDelta);
 }
 
-void ProcessorWrapper::onMidi2Message(const midi::message_view msg, int timeDelta)
+void ProcessorWrapper::onMidi2Message(const midi2::message_view msg, int timeDelta)
 {
-	const auto header = gmpi::midi_2_0::decodeHeader(msg);
+	const auto header = gmpi::midi2::decodeHeader(msg);
 
 	// only 8-byte messages supported.
-	if (header.messageType != gmpi::midi_2_0::ChannelVoice64)
+	if (header.messageType != gmpi::midi2::ChannelVoice64)
 		return;
 
 	Steinberg::Vst::Event m = {};
@@ -298,7 +298,7 @@ void ProcessorWrapper::onMidi2Message(const midi::message_view msg, int timeDelt
 
 		uint8_t wrappedMidi_1_0_message[4] =
 		{
-			static_cast<uint8_t>((gmpi::midi_2_0::ChannelVoice32 << 4) | (channelGroup & 0x0f)),
+			static_cast<uint8_t>((gmpi::midi2::ChannelVoice32 << 4) | (channelGroup & 0x0f)),
 			midiBytes[0],
 			midiBytes[1],
 			midiBytes[2],
@@ -328,9 +328,9 @@ void ProcessorWrapper::onMidi2Message(const midi::message_view msg, int timeDelt
 	switch (header.status)
 	{
 
-	case gmpi::midi_2_0::NoteOn:
+	case gmpi::midi2::NoteOn:
 	{
-		const auto note = gmpi::midi_2_0::decodeNote(msg);
+		const auto note = gmpi::midi2::decodeNote(msg);
 
 		m.type = Event::kNoteOnEvent;
 		m.noteOn.channel = header.channel;
@@ -340,9 +340,9 @@ void ProcessorWrapper::onMidi2Message(const midi::message_view msg, int timeDelt
 	}
 	break;
 
-	case gmpi::midi_2_0::NoteOff:
+	case gmpi::midi2::NoteOff:
 	{
-		const auto note = gmpi::midi_2_0::decodeNote(msg);
+		const auto note = gmpi::midi2::decodeNote(msg);
 
 		m.type = Event::kNoteOffEvent;
 		m.noteOff.channel = header.channel;
@@ -352,9 +352,9 @@ void ProcessorWrapper::onMidi2Message(const midi::message_view msg, int timeDelt
 	}
 	break;
 
-	case gmpi::midi_2_0::PolyAfterTouch:
+	case gmpi::midi2::PolyAfterTouch:
 	{
-		const auto aftertouch = gmpi::midi_2_0::decodePolyController(msg);
+		const auto aftertouch = gmpi::midi2::decodePolyController(msg);
 		m.type = Event::kPolyPressureEvent;
 		m.polyPressure.channel = header.channel;
 		m.polyPressure.noteId = -1;
