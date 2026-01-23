@@ -249,22 +249,33 @@ void VstFactory::ScanFolder(const std::string searchPath)
 	{
 		auto path = p.path();
 
-		if (!p.is_directory() && path.extension() == ".vst3")
+		if (path.extension().string() == ".vst3")
 		{
-			// handle universal bundles
-			auto parentFolder = path.parent_path();
-			if (parentFolder.parent_path().stem() == "Contents")
+			if (p.is_directory()) // handle bundles.
 			{
-				const bool isMacBinary = parentFolder.stem() == "MacOS";
-#ifdef _WIN32
-				const bool scanit = !isMacBinary; // scan anything not specifically mac
-#else
-				const bool isWinBinary = parentFolder.stem() == "x86_64-win";
-				const bool scanit = isMacBinary && !isWinBinary; // scan only if specifically mac
-#endif
-				if(scanit)
-					ScanDll(path.generic_string());
+				path = path / "Contents" /
+				#ifdef _WIN32
+					"MacOS";
+				#else
+					"x86_64-win";
+				#endif
+
+				// scan fist file in there.
+				for (auto& exe_path : std::filesystem::directory_iterator(path))
+				{
+					if (exe_path.is_dots())
+						continue;
+
+					ScanDll(exe_path.string());
+					break;
+				}
 			}
+#ifdef _WIN32
+			else // handle standalone dlls on Windows.
+			{
+				ScanDll(path.string());
+			}
+#endif
 		}
 	}
 }
