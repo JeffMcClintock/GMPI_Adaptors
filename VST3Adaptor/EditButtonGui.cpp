@@ -64,7 +64,7 @@ struct EditButtonGui final : public PluginEditor
 	gmpi::ReturnCode onPointerDown(gmpi::drawing::Point point, int32_t flags) override
 	{
 		// Let host handle right-clicks.
-		if (!controller_ || (flags & gmpi::api::GG_POINTER_FLAG_FIRSTBUTTON) == 0)
+		if (!controller_ || (flags & static_cast<int32_t>(gmpi::api::PointerFlags::FirstButton)) == 0)
 			return ReturnCode::Unhandled;
 
 		inputHost->setCapture();
