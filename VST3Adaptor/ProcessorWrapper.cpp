@@ -58,20 +58,20 @@ void ProcessorWrapper::process(int32_t count, const gmpi::api::Event* events)
 	(this->*(currentVstSubProcess))(count, events);
 }
 
-struct PinSink : public synthedit::IProcessorPinsCallback
+struct PinSink : public synthedit::IPinsCallback
 {
 	std::function<void(gmpi::PinDirection, gmpi::PinDatatype)> callback;
 
 	PinSink(std::function<void(gmpi::PinDirection, gmpi::PinDatatype)> cb) : callback(cb) {}
 
-	// IProcessorPinsCallback
+   // IPinsCallback
 	gmpi::ReturnCode onPin(PinDirection direction, PinDatatype datatype) override
 	{
 		callback(direction, datatype);
 		return gmpi::ReturnCode::Ok;
 	}
 
-	GMPI_QUERYINTERFACE_METHOD(synthedit::IProcessorPinsCallback);
+  GMPI_QUERYINTERFACE_METHOD(synthedit::IPinsCallback);
 	GMPI_REFCOUNT_NO_DELETE
 };
 

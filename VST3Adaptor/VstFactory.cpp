@@ -263,10 +263,11 @@ void VstFactory::ScanFolder(const std::string searchPath)
 				// scan fist file in there.
 				for (auto& exe_path : std::filesystem::directory_iterator(path))
 				{
-					if (exe_path.is_dots())
+                 const auto executablePath = exe_path.path();
+					if (executablePath.filename() == "." || executablePath.filename() == "..")
 						continue;
 
-					ScanDll(exe_path.string());
+                 ScanDll(executablePath.string());
 					break;
 				}
 			}
