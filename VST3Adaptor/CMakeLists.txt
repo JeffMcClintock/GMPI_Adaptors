@@ -105,6 +105,21 @@ ${VST3_SDK}/public.sdk/samples/vst-hosting/editorhost/source/platform/win32/wind
 )
 ENDIF()
 
+IF(APPLE)
+set(vst3_sdk_srcs ${vst3_sdk_srcs}
+${VST3_SDK}/public.sdk/source/vst/hosting/module_mac.mm
+${VST3_SDK}/public.sdk/samples/vst-hosting/editorhost/source/platform/mac/platform.mm
+${VST3_SDK}/public.sdk/samples/vst-hosting/editorhost/source/platform/mac/window.h
+${VST3_SDK}/public.sdk/samples/vst-hosting/editorhost/source/platform/mac/window.mm
+)
+set_source_files_properties(
+    ${VST3_SDK}/public.sdk/source/vst/hosting/module_mac.mm
+    ${VST3_SDK}/public.sdk/samples/vst-hosting/editorhost/source/platform/mac/platform.mm
+    ${VST3_SDK}/public.sdk/samples/vst-hosting/editorhost/source/platform/mac/window.mm
+    PROPERTIES COMPILE_FLAGS "-fobjc-arc"
+)
+ENDIF()
+
 set(srcs
 ${vst3_sdk_srcs}
 ${GMPI_SDK}/Core/Common.h
