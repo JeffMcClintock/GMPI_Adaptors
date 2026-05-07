@@ -249,25 +249,25 @@ void VstFactory::ScanFolder(const std::string searchPath)
 	{
 		auto path = p.path();
 
-		if (path.extension().string() == ".vst3")
+		if(path.extension().string() == ".vst3")
 		{
-			if (p.is_directory()) // handle bundles.
+			if(p.is_directory()) // handle bundles.
 			{
 				path = path / "Contents" /
-				#ifdef _WIN32
-					"MacOS";
-				#else
+#ifdef _WIN32
 					"x86_64-win";
-				#endif
+#else
+					"MacOS";
+#endif
 
 				// scan fist file in there.
-				for (auto& exe_path : std::filesystem::directory_iterator(path))
+				for(auto& exe_path : std::filesystem::directory_iterator(path))
 				{
-                 const auto executablePath = exe_path.path();
-					if (executablePath.filename() == "." || executablePath.filename() == "..")
+					const auto executablePath = exe_path.path();
+					if(executablePath.filename() == "." || executablePath.filename() == "..")
 						continue;
 
-                 ScanDll(executablePath.string());
+					ScanDll(executablePath.string());
 					break;
 				}
 			}
