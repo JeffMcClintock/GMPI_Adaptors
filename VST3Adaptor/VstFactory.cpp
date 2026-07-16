@@ -1,4 +1,5 @@
 #include "VstFactory.h"
+#include <cassert>
 #include <string>
 #include <sstream>
 #include <iostream>
@@ -25,6 +26,57 @@ using namespace Steinberg;
 using namespace Steinberg::Vst;
 
 const char* VstFactory::pluginIdPrefix = "gmpiVST3ADAPTOR:";
+
+// The Controller registers itself once it knows its handle.
+// The API contract guarantees the Controller outlives the Processor, so it always registers first.
+void VstFactory::registerWrapper(int32_t handle, ControllerWrapper* controller)
+{
+	std::lock_guard<std::mutex> lock(registryMutex);
+	auto& entry = registry[handle];
+	assert(!entry.processor); // Controller should always register before its Processor.
+	entry.controller = controller;
+}
+
+// The Processor registers itself once it knows its handle. Returns the Controller, which registered already.
+ControllerWrapper* VstFactory::registerWrapper(int32_t handle, ProcessorWrapper* processor)
+{
+	std::lock_guard<std::mutex> lock(registryMutex);
+	auto& entry = registry[handle];
+	entry.processor = processor;
+	return entry.controller;
+}
+
+void VstFactory::unregisterWrapper(int32_t handle, ControllerWrapper* controller)
+{
+	std::lock_guard<std::mutex> lock(registryMutex);
+	if (auto it = registry.find(handle); it != registry.end() && it->second.controller == controller)
+	{
+		assert(!it->second.processor); // Controller should always outlive its Processor.
+		registry.erase(it);
+	}
+}
+
+void VstFactory::unregisterWrapper(int32_t handle, ProcessorWrapper* processor)
+{
+	std::lock_guard<std::mutex> lock(registryMutex);
+	if (auto it = registry.find(handle); it != registry.end() && it->second.processor == processor)
+	{
+		// prevent the controller from writing through its pointers into the (deceased) processor.
+		if (it->second.controller)
+			it->second.controller->onProcessorRemoved();
+
+		it->second.processor = nullptr;
+		if (!it->second.controller)
+			registry.erase(it);
+	}
+}
+
+ControllerWrapper* VstFactory::getController(int32_t handle)
+{
+	std::lock_guard<std::mutex> lock(registryMutex);
+	auto it = registry.find(handle);
+	return it == registry.end() ? nullptr : it->second.controller;
+}
 
 gmpi::ReturnCode VstFactory::createInstance(const char* uniqueId, gmpi::api::PluginSubtype subtype, void** returnInterface)
 {
@@ -128,14 +180,8 @@ R"xml(
 		// Parameter to store state.
 		oss << "<Parameters>";
 
-		int i = 0;
-
-		// next-to last parameter stores state from getChunk() / setChunk().
-		oss << "<Parameter id=\"" << std::dec << i << "\" name=\"chunk\" ignorePatchChange=\"true\" datatype=\"blob\" />";
-		++i;
-
-		// Provide parameter to share pointer to plugin.
-		oss << "<Parameter id=\"" << std::dec << i << "\" name=\"effectptr\" ignorePatchChange=\"true\" persistant=\"false\" private=\"true\" datatype=\"blob\" />";
+		// parameter stores state from getChunk() / setChunk().
+		oss << "<Parameter id=\"0\" name=\"chunk\" ignorePatchChange=\"true\" datatype=\"blob\" />";
 
 		oss << "</Parameters>";
 
@@ -160,9 +206,6 @@ R"xml(
 	<Pin datatype = "int" hostConnect = "Processor/OfflineRenderMode" />
 )XML";
 
-		auto controllerPointerParamId = i;
-		oss << "<Pin name=\"effectptr\" datatype=\"blob\" parameterId=\"" << controllerPointerParamId << "\" private=\"true\" />";
-
 //		if (info.numMidiInputs)
 		{
 			oss << "<Pin name=\"MIDI In\" direction=\"in\" datatype=\"midi\" />";
@@ -180,12 +223,7 @@ R"xml(
 		oss << "</Audio>";
 
 		// GUI.
-		oss << "<GUI graphicsApi=\"GmpiGui\" >";
-
-		// aeffect ptr first.
-		oss << "<Pin name=\"effectptr\" datatype=\"blob\" parameterId=\"" << controllerPointerParamId << "\" private=\"true\" />";
-
-		oss << "</GUI>\n</Plugin>\n";
+		oss << "<GUI graphicsApi=\"GmpiGui\" />\n</Plugin>\n";
 
 		const auto xml = oss.str();
 

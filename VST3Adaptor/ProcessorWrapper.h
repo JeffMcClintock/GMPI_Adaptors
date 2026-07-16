@@ -143,7 +143,6 @@ class ProcessorWrapper : public gmpi::Processor
 	gmpi::IntInPin pinDenominator;
 	gmpi::FloatInPin pinHostBarStart;
 	gmpi::IntInPin pinOfflineRenderMode;
-	gmpi::BlobInPin pinControllerPointer;
 	gmpi::MidiInPin pinMIDIIn;
 	gmpi::MidiInPin pinParamBuss;
 
@@ -163,6 +162,8 @@ class ProcessorWrapper : public gmpi::Processor
 	int latency = 0;
 	int bufferPrimingCounter = {};
 	int bypassDelaysize = {};
+
+	int32_t handle_ = -1; // host-assigned handle, shared with our Controller.
 	ControllerWrapper* controller = {};
 
 	typedef void (ProcessorWrapper::* VstSubProcess_ptr)(int32_t count, const gmpi::api::Event* events);

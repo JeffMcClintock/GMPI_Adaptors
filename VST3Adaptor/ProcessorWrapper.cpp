@@ -1,6 +1,7 @@
 #include "./ProcessorWrapper.h"
 #include <algorithm>
 #include "Extensions/PinCount.h"
+#include "VstFactory.h"
 
 #define VST3_USE_MIDI_EXTENSION 0
 
@@ -42,6 +43,11 @@ ProcessorWrapper::ProcessorWrapper() :
 
 ProcessorWrapper::~ProcessorWrapper()
 {
+	if (handle_ != -1)
+	{
+		GetVstFactory()->unregisterWrapper(handle_, this);
+	}
+
 	if (component_)
 	{
         component_->setActive(false);
@@ -78,6 +84,8 @@ struct PinSink : public synthedit::IPinsCallback
 gmpi::ReturnCode ProcessorWrapper::open(gmpi::api::IUnknown* phost)
 {
 	Processor::open(phost);
+
+	handle_ = host->getHandle();
 
 	vstTime_.sampleRate = (double)host->getSampleRate();
 	processData.inputEvents = &vstEventList;
@@ -131,6 +139,16 @@ gmpi::ReturnCode ProcessorWrapper::open(gmpi::api::IUnknown* phost)
 	for (auto it = AudioOuts.begin(); it != AudioOuts.end(); ++it)
 	{
 		(*it)->setStreaming(true);
+	}
+
+	// Obtain our other half (the Controller) from the factory. The API contract guarantees the
+	// Controller outlives us, so (unless the VST3 failed to load) it's registered already,
+	// letting us initialise the VST3 plugin right now, *before* audio starts (important for reporting latency).
+	if (controller = GetVstFactory()->registerWrapper(handle_, this); controller)
+	{
+		controller->registerProcessor(&component_, &vstEffect_);
+
+		initVst();
 	}
 
 	return gmpi::ReturnCode::Ok;
@@ -206,7 +224,7 @@ void ProcessorWrapper::initVst()
 #ifdef _WIN32
 	_RPT1(0, "LATENCY INITAL: %d\n", latency);
 #endif
-// TODO	host.SetLatency(latency);
+	host->setLatency(latency);
 
 	currentVstSubProcess = &ProcessorWrapper::subProcess2<ST_PROCESS>;
 }
@@ -499,15 +517,6 @@ void ProcessorWrapper::onSetPins(void)
 	if (pinDenominator.isUpdated())
 	{
 		vstTime_.timeSigDenominator = pinDenominator;
-	}
-
-	if (pinControllerPointer.isUpdated() && pinControllerPointer.getValue().size() == sizeof(ControllerWrapper*))
-	{
-		controller = *(ControllerWrapper**)pinControllerPointer.getValue().data();
-
-		controller->registerProcessor(&component_, &vstEffect_);
-
-		initVst();
 	}
 
 	if (pinOfflineRenderMode.isUpdated() && vstEffect_)

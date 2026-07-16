@@ -1,5 +1,6 @@
 #include "ControllerWrapper.h"
 #include "myPluginProvider.h"
+#include "VstFactory.h"
 #include "./MyViewStream.h"
 #include "pluginterfaces/vst/ivsteditcontroller.h"
 #include "pluginterfaces/vst/ivstaudioprocessor.h"
@@ -48,12 +49,21 @@ ControllerWrapper::ControllerWrapper(const char* filename, const std::string& uu
 
 ControllerWrapper::~ControllerWrapper()
 {
+	// prevent dangling pointers to us.
+	GetVstFactory()->unregisterWrapper(handle_, this);
+
 	if (windowController)
 	{
 		windowController->destroyView();
 	}
 
 	plugin->terminatePlugin();
+}
+
+// The Processor was destroyed. Drop our pointers into it.
+void ControllerWrapper::onProcessorRemoved()
+{
+	processor_component_ptr = nullptr;
 }
 
 // A MIDI message has arrived from the host to set a parameter. Event has already been scheduled on Processor. Need to update Editor.
@@ -264,38 +274,20 @@ gmpi::ReturnCode ControllerWrapper::open()
 
 	plugin->controller->setComponentHandler(componentHandler.get());
 
-	// Pass pointer to 'this' to Process and GUI.
-	const int controllerPtrParamId = chunkParamId + 1;
-	const int voiceId = 0;
-	auto me = this;
+	// Make ourself available to the Processor and GUI halves via the factory.
+	GetVstFactory()->registerWrapper(handle_, this);
 
-	host_->setParameter(controllerPtrParamId, gmpi::Field::Value, voiceId, sizeof(me), (const uint8_t*) &me);
-
+	// always have to pass initial state from processor to controller.
 	{
-		// always have to pass initial state from processor to controller.
-		{
-			assert(plugin->controller && plugin->component);
+		assert(plugin->controller && plugin->component);
 
-			// get processor state.
-			MyBufferStream stream;
-			plugin->component->getState(&stream);
+		// get processor state.
+		MyBufferStream stream;
+		plugin->component->getState(&stream);
 
-			// pass to controller
-			MyViewStream s3(stream.buffer_.data(), static_cast<int32_t>(stream.buffer_.size()));
-			plugin->controller->setComponentState(&s3);
-		}
-
-#if 0 // TODO ??
-		// Test if host has a valid chunk preset.
-		isSynthEditPresetEmpty = false;
-		host_->updateParameter(host_->getParameterHandle(handle_, chunkParamId), gmpi::Field::Value, voiceId);
-
-		// In the case we have no preset stored yet (because user *just* inserted plugin), Copy init preset to SE patch memory.
-		if (isSynthEditPresetEmpty)
-		{
-			preSaveState();
-		}
-#endif
+		// pass to controller
+		MyViewStream s3(stream.buffer_.data(), static_cast<int32_t>(stream.buffer_.size()));
+		plugin->controller->setComponentState(&s3);
 	}
 
 	startTimer(20);

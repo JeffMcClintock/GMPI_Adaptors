@@ -69,6 +69,9 @@ public:
 	
 	void setParameterFromProcessorUnsafe(uint32_t paramId, double valueNormalized);
 
+	// factory notification: the Processor was destroyed.
+	void onProcessorRemoved();
+
 	// IParameterObserver
 	gmpi::ReturnCode setParameter(int32_t parameterIndex, gmpi::Field fieldId, int32_t voice, int32_t size, const uint8_t* data) override;
 

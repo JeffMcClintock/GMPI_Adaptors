@@ -4,6 +4,7 @@
 #include "Drawing.h"
 #include "ControllerWrapper.h"
 #include "myPluginProvider.h"
+#include "VstFactory.h"
 
 using namespace gmpi;
 using namespace gmpi::editor;
@@ -16,7 +17,14 @@ struct EditButtonGui final : public PluginEditor
 	std::string filename_;
 
 	ControllerWrapper* controller_ = {};
-	static const int controllertPtrPinId = 0;
+
+	ReturnCode initialize() override
+	{
+		// obtain our other half (the Controller) from the factory. We share the same host-assigned handle.
+		controller_ = GetVstFactory()->getController(editorHost->getHandle());
+
+		return PluginEditor::initialize();
+	}
 
 	ReturnCode render(gmpi::drawing::api::IDeviceContext* drawingContext) override
 	{
@@ -49,16 +57,6 @@ struct EditButtonGui final : public PluginEditor
 		g.drawTextU(txt, textFormat, textRect, brush);
 
 		return ReturnCode::Ok;
-	}
-
-	ReturnCode setPin(int32_t PinIndex, int32_t voice, int32_t size, const uint8_t* data) override
-	{
-		if (controllertPtrPinId == PinIndex && size == sizeof(void*))
-		{
-			controller_ = *(ControllerWrapper**)data;
-		}
-
-		return PluginEditor::setPin(PinIndex, voice, size, data);
 	}
 
 	gmpi::ReturnCode onPointerDown(gmpi::drawing::Point point, int32_t flags) override

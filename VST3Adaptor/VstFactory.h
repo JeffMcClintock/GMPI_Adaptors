@@ -1,5 +1,6 @@
 #pragma once
 #include <map>
+#include <mutex>
 #include <unordered_map>
 #include <vector>
 
@@ -10,6 +11,8 @@
 #include "RefCountMacros.h"
 
 class VstFactory* GetVstFactory();
+class ProcessorWrapper;
+class ControllerWrapper;
 
 // VstFactory - a singleton object. The plugin registers it's ID with the factory.
 class VstFactory : public gmpi::api::IPluginFactory
@@ -39,7 +42,23 @@ public:
 	gmpi::ReturnCode getPluginInformation(int32_t index, gmpi::api::IString* returnXml) override;
 	std::string uuidFromWrapperID(const char* uniqueId);
 
+	// Registry connecting the two halves (Processor/Controller) of each plugin instance.
+	// Both halves share the same host-assigned handle.
+	void registerWrapper(int32_t handle, ControllerWrapper* controller);
+	ControllerWrapper* registerWrapper(int32_t handle, ProcessorWrapper* processor); // returns the controller, if it registered already.
+	void unregisterWrapper(int32_t handle, ControllerWrapper* controller);
+	void unregisterWrapper(int32_t handle, ProcessorWrapper* processor);
+	ControllerWrapper* getController(int32_t handle);
+
 private:
+	struct wrapperPair
+	{
+		ProcessorWrapper* processor{};
+		ControllerWrapper* controller{};
+	};
+	std::mutex registryMutex;
+	std::map<int32_t, wrapperPair> registry;
+
 	void ScanVsts();
 	void ScanDll(const std::string& load_filename);
 	void ScanFolder(const std::string searchPath);
