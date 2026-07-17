@@ -61,6 +61,7 @@ private:
 
 	void ScanVsts();
 	void ScanDll(const std::string& load_filename);
+	void ScanDllUnguarded(const std::string& load_filename);
 	void ScanFolder(const std::string searchPath);
 
 	std::wstring getSettingFilePath();

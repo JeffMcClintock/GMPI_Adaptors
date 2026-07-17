@@ -97,7 +97,7 @@ public:
 			}
 		}
 
-		if (res)
+		if (res && controller)
 		{
 			connectComponents();
 

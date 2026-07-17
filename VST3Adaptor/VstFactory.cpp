@@ -203,7 +203,7 @@ R"xml(
 	<Pin name = "Numerator" datatype = "int" hostConnect = "Time/Timesignature/Numerator" />
 	<Pin name = "Denominator" datatype = "int" hostConnect = "Time/Timesignature/Denominator" />
 	<Pin name = "Host Bar Start" datatype = "float" hostConnect = "Time/BarStartPosition" />
-	<Pin datatype = "int" hostConnect = "Processor/OfflineRenderMode" />
+	<Pin name = "OfflineMode" datatype = "int" hostConnect = "Processor/OfflineRenderMode" />
 )XML";
 
 //		if (info.numMidiInputs)
@@ -283,14 +283,27 @@ void VstFactory::ScanVsts()
 
 void VstFactory::ScanFolder(const std::string searchPath)
 {
-	for (auto& p : std::filesystem::recursive_directory_iterator(searchPath))
+	// error_code overloads: a malformed bundle or access-denied folder must not abort the entire scan.
+	std::error_code ec;
+	auto it = std::filesystem::recursive_directory_iterator(searchPath, std::filesystem::directory_options::skip_permission_denied, ec);
+	if (ec)
+		return;
+
+	for (; it != std::filesystem::recursive_directory_iterator(); it.increment(ec))
 	{
+		if (ec)
+			return;
+
+		const auto& p = *it;
 		auto path = p.path();
 
 		if(path.extension().string() == ".vst3")
 		{
-			if(p.is_directory()) // handle bundles.
+			if(p.is_directory(ec)) // handle bundles.
 			{
+				// sub-folders of a bundle are off-limits, don't recurse into them.
+				it.disable_recursion_pending();
+
 				path = path / "Contents" /
 #ifdef _WIN32
 					"x86_64-win";
@@ -298,8 +311,8 @@ void VstFactory::ScanFolder(const std::string searchPath)
 					"MacOS";
 #endif
 
-				// scan fist file in there.
-				for(auto& exe_path : std::filesystem::directory_iterator(path))
+				// scan first file in there. (skipped cleanly if the bundle lacks this folder)
+				for(auto& exe_path : std::filesystem::directory_iterator(path, ec))
 				{
 					const auto executablePath = exe_path.path();
 					if(executablePath.filename() == "." || executablePath.filename() == "..")
@@ -326,7 +339,27 @@ struct backgroundData
 	const char* shellName;
 };
 
+// A misbehaving plugin can crash (access-violate) while being scanned. That's a structured (SEH)
+// exception, which ordinary C++ catch(...) can NOT catch, and it would kill the entire scan
+// (and the host). Guard each DLL individually so one bad plugin is simply skipped.
+// NOTE: this function must contain no objects with destructors (compiler error C2712).
 void VstFactory::ScanDll(const std::string& path)
+{
+#ifdef _WIN32
+	__try
+	{
+		ScanDllUnguarded(path);
+	}
+	__except (EXCEPTION_EXECUTE_HANDLER)
+	{
+		_RPT1(0, "ScanDll: plugin crashed during scan, skipping: %s\n", path.c_str());
+	}
+#else
+	ScanDllUnguarded(path);
+#endif
+}
+
+void VstFactory::ScanDllUnguarded(const std::string& path)
 {
 	if (scannedFiles[path] == 1)
 		return;
@@ -357,7 +390,7 @@ void VstFactory::ScanDll(const std::string& path)
 
 				// No EditController found? (needed for allowing editor)
 				if (!plugProvider.controller)
-					return;
+					continue; // skip this class, but keep scanning the DLL's other classes.
 
 				int numInputs{};
 				int numOutputs{};
