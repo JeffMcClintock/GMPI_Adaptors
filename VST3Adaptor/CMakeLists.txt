@@ -234,6 +234,11 @@ SET_TARGET_PROPERTIES(${PROJECT_NAME} PROPERTIES FOLDER "adaptors")
 SET_TARGET_PROPERTIES(base PROPERTIES FOLDER "adaptors")
 SET_TARGET_PROPERTIES(pluginterfaces PROPERTIES FOLDER "adaptors")
 
+# The SDK's static libs get linked INTO our shared module, so on ELF platforms
+# they have to be position-independent as well - otherwise ld rejects the
+# R_X86_64_PC32 relocations the non-PIC objects carry.
+set_target_properties(base pluginterfaces PROPERTIES POSITION_INDEPENDENT_CODE ON)
+
 if(APPLE)
     set_target_properties(${PROJECT_NAME} PROPERTIES BUNDLE_EXTENSION "gmpi")
 else()
