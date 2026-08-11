@@ -49,7 +49,8 @@
 #include <string>
 
 #include "Processor.h"
-#include "plugin.hpp"   // the Rack mock (same include upstream compiles against)
+#include "plugin.hpp"          // the Rack mock (same include upstream compiles against)
+#include "VcvPanelLayout.h"    // where the module says its controls are
 
 namespace vcv
 {
@@ -102,57 +103,46 @@ namespace detail
 	}
 } // namespace detail
 
-// Generate <PatchPoints> from the module's own widget.
+// Generate <PatchPoints> from the panel layout the module declared.
 //
-// A Rack module states its jack layout in its ModuleWidget's constructor:
+// Positions are Rack panel pixels, the same space the panel SVG uses and
+// therefore the space SynthEdit wants. They are rounded because SynthEdit
+// reads `center` with StringToInt.
 //
-//     addInput(createInputCentered<ThemedPJ301MPort>(
-//                  mm2px(Vec(7.62, 67.53)), module, Fade::IN1_INPUT));
+// pinBase IS NOT ZERO, and getting it wrong points every jack at the wrong
+// pin. `pinId` indexes SynthEdit's DOCUMENT pin list, which is not the
+// <Audio> list: a module's GUI pins are numbered ahead of its audio pins. So
+// with N parameters (hence N <GUI> pins), audio pin k is document pin N + k.
 //
-// which is the position AND the port id together, in the module's own source.
-// That beats reading the panel SVG: the SVG's component layer is a
-// convention Fundamental happens to follow, whereas this is the code Rack
-// itself lays the panel out from, so it cannot drift from what the module
-// really has.
-//
-// Positions are in Rack panel pixels (mm2px, 1px = 1/75in), which is the same
-// space the panel SVG uses and therefore the space SynthEdit wants. They are
-// rounded because SynthEdit reads center with StringToInt.
-inline std::string generatePatchPoints(rack::ModuleWidget& widget,
-                                       size_t numInputs, size_t numOutputs,
+// Determined empirically, and worth re-checking if SynthEdit changes: connect
+// something to the module and see which pin the host says you hit. For Fade
+// (2 params, 3 inputs) In1 is portId 1 and lands on document pin 3.
+inline std::string generatePatchPoints(const PanelLayout& layout,
+                                       std::size_t pinBase,
                                        const RegistrationOptions& opt)
 {
 	std::string pts;
 
-	auto emit = [&](const rack::PortWidget* w, size_t pinIndex)
+	auto emit = [&](const ControlLayout& c, size_t pinIndex)
 	{
-		if (!w)
-			return;
-
 		int radius = opt.patchPointRadius;
 		if (radius <= 0)
-			radius = static_cast<int>(std::lround(std::min(w->box.size.x, w->box.size.y) * 0.5f));
+			radius = static_cast<int>(std::lround(c.radius()));
 
 		if (radius <= 0)
 			return;   // no declared size and no override — skip rather than guess
 
 		pts += "    <PatchPoint pinId=\"" + std::to_string(pinIndex)
-		     + "\" center=\"" + std::to_string(static_cast<int>(std::lround(w->box.pos.x)))
-		     + ","            + std::to_string(static_cast<int>(std::lround(w->box.pos.y)))
+		     + "\" center=\"" + std::to_string(static_cast<int>(std::lround(c.x)))
+		     + ","            + std::to_string(static_cast<int>(std::lround(c.y)))
 		     + "\" radius=\"" + std::to_string(radius) + "\" />\n";
 	};
 
-	// Pin indices follow the generated order: inputs, then outputs.
-	for (auto* w : widget.inputWidgets)
-	{
-		if (w && w->portId >= 0 && static_cast<size_t>(w->portId) < numInputs)
-			emit(w, static_cast<size_t>(w->portId));
-	}
-	for (auto* w : widget.outputWidgets)
-	{
-		if (w && w->portId >= 0 && static_cast<size_t>(w->portId) < numOutputs)
-			emit(w, numInputs + static_cast<size_t>(w->portId));
-	}
+	// Audio pin order is inputs then outputs, shifted past the GUI pins.
+	for (const auto& c : layout.inputs)
+		emit(c, pinBase + static_cast<size_t>(c.id));
+	for (const auto& c : layout.outputs)
+		emit(c, pinBase + layout.numInputs + static_cast<size_t>(c.id));
 
 	if (pts.empty())
 		return {};
@@ -192,8 +182,19 @@ inline std::string generatePluginXml(rack::Model& model, const RegistrationOptio
 	}
 	x += "  </Parameters>\n";
 
-	// Present-but-empty: the editor (if any) registers separately withId().
-	x += "  <GUI graphicsApi=\"GmpiGui\">\n  </GUI>\n";
+	// The editor registers separately (withId / registerEditor), but its pins
+	// are declared here. One per parameter, in paramId order — VcvEditor
+	// constructs its Pin<float>s in the same order, and GMPI indexes editor
+	// pins by construction order, so the two line up.
+	x += "  <GUI graphicsApi=\"GmpiGui\">\n";
+	for (size_t i = 0; i < probe->params.size(); ++i)
+	{
+		const auto& q = probe->paramQuantities[i];
+		x += "    <Pin name=\"";
+		detail::appendEscaped(x, q.name.empty() ? ("Param " + std::to_string(i)) : q.name);
+		x += "\" private=\"true\" parameterId=\"" + std::to_string(i) + "\" />\n";
+	}
+	x += "  </GUI>\n";
 
 	// Audio pins — inputs, then outputs, then one pin per parameter. This
 	// order is mirrored exactly by VcvProcessor's pin construction; the two
@@ -219,15 +220,11 @@ inline std::string generatePluginXml(rack::Model& model, const RegistrationOptio
 	}
 	x += "  </Audio>\n";
 
-	// Jack positions, from the module's own widget. Constructed here and
-	// dropped; its child widgets leak, which is a one-off at registration and
-	// not worth a tree walk to avoid.
+	// Jack positions, from the module's own widget. The GUI pins emitted above
+	// are numbered ahead of the audio pins in SynthEdit's document pin list,
+	// so they offset every patch point — see generatePatchPoints.
 	if (opt.patchPoints)
-	{
-		std::unique_ptr<rack::ModuleWidget> widget(model.createModuleWidget(probe.get()));
-		if (widget)
-			x += generatePatchPoints(*widget, probe->inputs.size(), probe->outputs.size(), opt);
-	}
+		x += generatePatchPoints(readPanelLayout(model), probe->params.size(), opt);
 
 	if (opt.extraXml)
 		x += opt.extraXml;
@@ -326,8 +323,14 @@ private:
 //     [] { return vcv::createProcessor("Fade"); }
 inline gmpi::api::IUnknown* createProcessor(const char* slug)
 {
-	return static_cast<gmpi::api::IUnknown*>(
-		static_cast<gmpi::api::IProcessor*>(new VcvProcessor(slug)));
+	auto* p = new VcvProcessor(slug);
+
+	// Clear the thread_local the pins registered through, exactly as
+	// Register<>::withXml does. Leaving it dangling would let a later
+	// self-registering pin attach itself to a destroyed processor.
+	p->constructingInstance = {};
+
+	return static_cast<gmpi::api::IUnknown*>(static_cast<gmpi::api::IProcessor*>(p));
 }
 
 // Generate the XML from the registered Model and register the processor.

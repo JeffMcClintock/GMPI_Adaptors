@@ -29,9 +29,17 @@ auto r = vcv::registerModule("Fade",
   marked `MOCK`. `createModel()` files every model in a `ModelRegistry`
   singleton at static-init time, so the adaptor can reach a module by slug
   without naming its C++ type.
+- **`VcvPanelLayout.h`** — `readPanelLayout()`: builds the module's own
+  `ModuleWidget` and walks it for every control's position, size, id and
+  range. Feeds both the patch-point generator and the editor.
 - **`VcvAdaptor.h`** — `generatePluginXml()` (config → GMPI XML) and
   `VcvProcessor` (the generic bridge: a pin per port, a parameter pin per
   param, one `process()` call per sample).
+- **`VcvEditor.h`** — `VcvEditor`: draws the panel SVG and works the knobs.
+  Fixed-size from the SVG's own `width`/`height`; hit-tests knobs by the
+  layout's radii; vertical drag writes the parameter pin. It draws only the
+  indicator line, because Fundamental's panel SVGs already carry the knob and
+  jack artwork.
 
 ## Patch points come from the module too
 
@@ -58,7 +66,13 @@ is an 8.7mm jack, so 13px. Override with `patchPointRadius`, or set
 
 - **Pin order**: inputs in VCV's order, then outputs, then parameter pins.
   `generatePluginXml()` and `VcvProcessor`'s pin construction both follow it;
-  they must never diverge. Patch-point XML indexes into this order.
+  they must never diverge.
+- **Patch-point `pinId` is NOT that order.** It indexes SynthEdit's *document*
+  pin list, where a module's GUI pins are numbered ahead of its audio pins. So
+  with N parameters (hence N `<GUI>` pins), audio pin *k* is document pin
+  *N + k*. This bites silently: adding an editor renumbers every jack. To
+  re-check, connect something and see which pin the host reports — for Fade
+  (2 params, 3 inputs) `IN1_INPUT` is portId 1 and lands on document pin 3.
 - **Ordering**: `registerModule()` resolves the slug at static-init, so
   `#include` the upstream `.cpp` *above* the call, in the same translation
   unit — top-to-bottom initialization within one TU is the guarantee.
