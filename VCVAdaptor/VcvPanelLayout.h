@@ -65,6 +65,10 @@ struct PanelLayout
 	std::vector<ControlLayout> inputs;
 	std::vector<ControlLayout> outputs;
 
+	// Whatever the module passed to createPanel(), e.g. "res/Fade.svg".
+	// Resolve against rack::PanelRegistry to get the bytes.
+	std::string panelPath;
+
 	// Table sizes as the module declared them in config(), which is not the
 	// same as the vector sizes above — a module may leave a port unplaced.
 	std::size_t numParams{}, numInputs{}, numOutputs{};
@@ -88,6 +92,8 @@ inline PanelLayout readPanelLayout(rack::Model& model)
 	std::unique_ptr<rack::ModuleWidget> widget(model.createModuleWidget(probe.get()));
 	if (!widget)
 		return layout;
+
+	layout.panelPath = widget->panelPath;
 
 	for (auto* w : widget->paramWidgets)
 	{

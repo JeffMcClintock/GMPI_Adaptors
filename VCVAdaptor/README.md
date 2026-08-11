@@ -6,19 +6,25 @@ A Rack module already declares its whole configuration in its constructor:
 `config()` sizes the param/input/output tables, `configParam()` carries names,
 ranges and defaults, `configInput()`/`configOutput()` carry port names. The
 adaptor constructs one instance, reads that configuration back, and generates
-the GMPI plugin XML to suit. Per-module code shrinks to: compile upstream's
-`.cpp` against the mock, plus one `registerModule()` call.
+the GMPI plugin XML to suit. Per-module code shrinks to nothing: compiling the
+module's `.cpp` is what registers the plugin.
 
 ```cpp
-#include "VcvAdaptor.h"
+#include "VcvModule.h"
 #include "vcv/Fade.cpp"   // upstream, byte-for-byte
-
-namespace {
-auto r = vcv::registerModule("Fade",
-    { .id = "VCV: Fade", .category = "VCV Fundamental", .vendor = "VCV (ported)" },
-    [] { return vcv::createProcessor("Fade"); });
-}
 ```
+
+That is the whole per-module source file. The module's own registration line —
+`Model* modelFade = createModel<Fade, FadeWidget>("Fade")` — runs at static
+init, and `createModel()` turns it into a registered GMPI plugin: config()
+becomes the XML, the ModuleWidget becomes the patch points and the editor's
+knob layout, and the `createPanel("res/Fade.svg")` path resolves against the
+art the build staged.
+
+Set once per plugin, in CMake, never per module: `VCV_MODULE_ID_PREFIX`,
+`VCV_MODULE_CATEGORY`, `VCV_MODULE_VENDOR`. Opt out with `VCVADAPTOR_NO_GUI`
+(DSP only) or `VCV_NO_AUTO_REGISTER` (register by hand with
+`vcv::registerModule()`).
 
 ## Pieces
 
@@ -73,9 +79,17 @@ is an 8.7mm jack, so 13px. Override with `patchPointRadius`, or set
   *N + k*. This bites silently: adding an editor renumbers every jack. To
   re-check, connect something and see which pin the host reports — for Fade
   (2 params, 3 inputs) `IN1_INPUT` is portId 1 and lands on document pin 3.
-- **Ordering**: `registerModule()` resolves the slug at static-init, so
-  `#include` the upstream `.cpp` *above* the call, in the same translation
-  unit — top-to-bottom initialization within one TU is the guarantee.
+- **Ordering**: `VcvModule.h` must precede the module's `.cpp`, which is what
+  instantiates `createModel()` and so needs the machinery declared. Anything
+  written during static init and read later must live in a **function-local**
+  static: an `inline static std::string` has its own dynamic initialization,
+  unordered against that write, so the assignment lands first and the
+  constructor then wipes it. That failure looks like an editor that cannot
+  find its own model.
+- **Include order**: GMPI and gmpi_ui headers come before `plugin.hpp`, which
+  ends with `using namespace rack;` as Rack's own does. Afterwards, `rack::Rect`
+  and `rack::Vec` make every `Rect` in `SvgParser.h` ambiguous. `VcvModule.h`
+  handles this; it matters if you assemble the headers yourself.
 - **Volts**: GMPI 1.0 = 10V. Audio pins scale ×10 in / ÷10 out so upstream
   idioms like `cv / 10.f` see real volts. Parameter pins are raw, in the
   module's declared range.

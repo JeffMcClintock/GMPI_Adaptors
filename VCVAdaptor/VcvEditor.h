@@ -51,15 +51,25 @@ inline constexpr float knobDragPixels = 200.0f;
 class VcvEditor : public gmpi::editor::PluginEditor
 {
 public:
-	VcvEditor(const char* slug, const char* panelSvg)
-		: svg(panelSvg)
+	// panelSvg is optional: pass nullptr and the panel named by the module's
+	// own createPanel() call is looked up in rack::PanelRegistry, which is
+	// where the build stages res/*.svg. Resolving here rather than at
+	// static-init time is deliberate — see PanelRegistry.
+	explicit VcvEditor(const char* slug, const char* panelSvg = nullptr)
 	{
 		auto* model = rack::ModelRegistry::instance().find(slug);
 		assert(model && "VCV model not registered - is the module's .cpp compiled into this plugin?");
 		if (model)
 			layout = readPanelLayout(*model);
 
-		panelSize = intrinsicSize(panelSvg);
+		if (!panelSvg && !layout.panelPath.empty())
+			panelSvg = rack::PanelRegistry::instance().find(layout.panelPath);
+
+		assert(panelSvg && "no panel art - is the generated panel-resources header compiled in?");
+		if (panelSvg)
+			svg = panelSvg;
+
+		panelSize = intrinsicSize(svg.c_str());
 
 		// One pin per parameter, in paramId order, matching the <GUI> pin
 		// list generatePluginXml() emits. std::deque because the pins
@@ -247,7 +257,7 @@ private:
 
 // See createProcessor: the capture-less lambda GMPI wants can still pass
 // literals through to here.
-inline gmpi::api::IUnknown* createEditor(const char* slug, const char* panelSvg)
+inline gmpi::api::IUnknown* createEditor(const char* slug, const char* panelSvg = nullptr)
 {
 	auto* e = new VcvEditor(slug, panelSvg);
 

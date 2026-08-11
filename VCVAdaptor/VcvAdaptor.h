@@ -60,7 +60,7 @@ inline constexpr float voltsPerUnit = 10.0f;
 
 struct RegistrationOptions
 {
-	const char* id;               // GMPI plugin id, e.g. "VCV: Fade"
+	const char* id = nullptr;     // GMPI plugin id, e.g. "VCV: Fade"
 	const char* name = nullptr;   // display name; defaults to the slug
 	const char* category = "VCV";
 	const char* vendor = "VCV (ported)";

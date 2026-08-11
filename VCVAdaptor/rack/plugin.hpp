@@ -280,7 +280,49 @@ struct Widget
 	void addChild(Widget* w) { children.push_back(w); }
 };
 
-struct SvgPanel  : Widget {};
+// Panel art, keyed by the path the module names in createPanel(). A plugin's
+// build stages its res/*.svg into here (see the generated panel-resources
+// header), so nothing has to hand the art to the editor by hand.
+//
+// Lookup is deliberately LAZY: createPanel() records the path and the editor
+// resolves it at construction, long after static init. Resolving eagerly
+// would make this race the panel registrations across translation units,
+// where inline-variable initialization order is unspecified.
+class PanelRegistry
+{
+public:
+	static PanelRegistry& instance()
+	{
+		static PanelRegistry singleton;
+		return singleton;
+	}
+
+	// Returns bool so a plugin can register with an inline variable.
+	bool add(std::string path, const char* svg)
+	{
+		panels_.push_back({ std::move(path), svg });
+		return true;
+	}
+
+	const char* find(std::string_view path) const
+	{
+		for (const auto& p : panels_)
+		{
+			if (p.path == path)
+				return p.svg;
+		}
+		return nullptr;
+	}
+
+private:
+	struct Entry { std::string path; const char* svg; };
+	std::vector<Entry> panels_;
+};
+
+struct SvgPanel : Widget
+{
+	std::string path;   // resolved against PanelRegistry when it is needed
+};
 struct ParamWidget : Widget { Module* module{}; int paramId{}; };
 struct PortWidget  : Widget { Module* module{}; int portId{}; };
 
@@ -334,9 +376,13 @@ template<class T> T* createOutputCentered(Vec centre, Module* module, int portId
 	return w;
 }
 
-inline SvgPanel* createPanel(std::string /*lightSvg*/, std::string /*darkSvg*/ = "")
+// The light panel's path is kept — that is how the editor finds the art
+// without anyone naming it twice. The dark variant is ignored for now.
+inline SvgPanel* createPanel(std::string lightSvg, std::string /*darkSvg*/ = "")
 {
-	return new SvgPanel;   // MOCK: the GMPI editor draws the panel instead.
+	auto* p = new SvgPanel;
+	p->path = std::move(lightSvg);
+	return p;
 }
 
 // ---------------------------------------------------------------------------
@@ -368,8 +414,18 @@ struct ModuleWidget : Widget
 	std::vector<PortWidget*>  inputWidgets;
 	std::vector<PortWidget*>  outputWidgets;
 
+	// Whatever the module passed to setPanel(createPanel("res/Foo.svg")).
+	std::string panelPath;
+
 	void setModule(Module* m) { module = m; }
-	void setPanel(Widget* p)  { addChild(p); }
+
+	void setPanel(Widget* p)
+	{
+		if (auto* svg = dynamic_cast<SvgPanel*>(p))
+			panelPath = svg->path;
+
+		addChild(p);
+	}
 
 	void addParam(ParamWidget* w) { paramWidgets.push_back(w);  addChild(w); }
 	void addInput(PortWidget* w)  { inputWidgets.push_back(w);  addChild(w); }
@@ -399,6 +455,26 @@ struct Model
 	virtual Module*       createModule() { return nullptr; }
 	virtual ModuleWidget* createModuleWidget(Module*) { return nullptr; }
 };
+
+} // namespace rack
+
+// Declared, not defined: VcvAutoRegister.h supplies the body, and createModel
+// below calls it so that a module registers itself with GMPI simply by being
+// compiled. The call is dependent on createModel's template arguments, so it
+// is looked up when createModel is instantiated — by which point the
+// definition is visible, because the module's .cpp is #included AFTER
+// VcvModule.h. Include only plugin.hpp and you get a link error naming this,
+// which is the intended signpost.
+//
+// Define VCV_NO_AUTO_REGISTER before the module's .cpp to opt out and call
+// vcv::registerModule() yourself.
+namespace vcv
+{
+template<class TModule, class TModuleWidget>
+void autoRegisterModel(rack::Model& model);
+}
+
+namespace rack {
 
 // Every Model that createModel() builds, findable by slug.
 //
@@ -468,6 +544,13 @@ Model* createModel(std::string slug)
 	model->slug = std::move(slug);
 
 	ModelRegistry::instance().add(model);
+
+#ifndef VCV_NO_AUTO_REGISTER
+	// This is the whole point: compiling a Rack module's .cpp is all it takes
+	// to get a GMPI plugin out of it. No per-module registration to write, and
+	// none to forget.
+	vcv::autoRegisterModel<TModule, TModuleWidget>(*model);
+#endif
 
 	return model;
 }
