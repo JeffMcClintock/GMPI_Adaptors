@@ -33,6 +33,27 @@ auto r = vcv::registerModule("Fade",
   `VcvProcessor` (the generic bridge: a pin per port, a parameter pin per
   param, one `process()` call per sample).
 
+## Patch points come from the module too
+
+`generatePatchPoints()` builds the module's own `ModuleWidget` and walks it.
+A Rack module states its jack layout in that widget's constructor:
+
+```cpp
+addInput(createInputCentered<ThemedPJ301MPort>(
+             mm2px(Vec(7.62, 67.53)), module, Fade::IN1_INPUT));
+```
+
+— position and port id together, in the module's own source. That is a better
+source than the panel SVG: the SVG's `display:none` component layer is a
+convention Fundamental happens to follow, whereas this is the code Rack itself
+lays the panel out from, so it cannot drift from what the module really has.
+(For Fade the two agree to the pixel, which is a useful cross-check: 156, 199,
+244, 289, 334.)
+
+The hit radius comes from each component's declared size — `ThemedPJ301MPort`
+is an 8.7mm jack, so 13px. Override with `patchPointRadius`, or set
+`patchPoints = false` to omit the section.
+
 ## Contracts worth knowing
 
 - **Pin order**: inputs in VCV's order, then outputs, then parameter pins.

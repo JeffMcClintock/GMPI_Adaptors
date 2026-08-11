@@ -284,13 +284,22 @@ struct SvgPanel  : Widget {};
 struct ParamWidget : Widget { Module* module{}; int paramId{}; };
 struct PortWidget  : Widget { Module* module{}; int portId{}; };
 
-// The concrete Fundamental control set. Distinct types so createXxx<T> picks
-// them up; identical behaviour (none) for now.
+// The concrete Fundamental control set.
+//
+// SIZES ARE REAL and load-bearing: generatePluginXml() turns a port widget's
+// size into its patch-point hit radius. Rack takes these from each component's
+// SVG, which the mock has no reader for, so the panel dimensions are stated
+// here instead. A PJ301M is an 8.7mm panel jack; the knobs are sized for
+// completeness and nothing reads them yet.
 struct ThemedScrew      : Widget {};
-struct RoundBlackKnob   : ParamWidget {};
-struct Trimpot          : ParamWidget {};
-struct ThemedPJ301MPort : PortWidget {};
+struct RoundBlackKnob   : ParamWidget { RoundBlackKnob()   { box.size = mm2px(Vec(9.5f, 9.5f)); } };
+struct Trimpot          : ParamWidget { Trimpot()          { box.size = mm2px(Vec(7.0f, 7.0f)); } };
+struct ThemedPJ301MPort : PortWidget  { ThemedPJ301MPort() { box.size = mm2px(Vec(8.7f, 8.7f)); } };
 
+// NOTE ON box.pos: for widgets made by the *Centered helpers below, the mock
+// leaves box.pos holding the CENTRE. Rack converts it to a top-left; we do
+// not, because the centre is exactly what a patch point needs and nothing
+// here lays anything out. Read box.pos as "where createXxxCentered put it".
 template<class T> T* createWidget(Vec pos)
 {
 	T* w = new T;
@@ -351,12 +360,20 @@ struct ModuleWidget : Widget
 {
 	Module* module{};
 
+	// Kept, not just parented: this is where the module states each jack's
+	// position and which port it belongs to, and generatePluginXml() reads it
+	// back to place the patch points. Rack exposes the same thing through
+	// getInput()/getOutput().
+	std::vector<ParamWidget*> paramWidgets;
+	std::vector<PortWidget*>  inputWidgets;
+	std::vector<PortWidget*>  outputWidgets;
+
 	void setModule(Module* m) { module = m; }
 	void setPanel(Widget* p)  { addChild(p); }
 
-	void addParam(ParamWidget* w) { addChild(w); }
-	void addInput(PortWidget* w)  { addChild(w); }
-	void addOutput(PortWidget* w) { addChild(w); }
+	void addParam(ParamWidget* w) { paramWidgets.push_back(w);  addChild(w); }
+	void addInput(PortWidget* w)  { inputWidgets.push_back(w);  addChild(w); }
+	void addOutput(PortWidget* w) { outputWidgets.push_back(w); addChild(w); }
 
 	template<class T> T* getModule() { return dynamic_cast<T*>(module); }
 

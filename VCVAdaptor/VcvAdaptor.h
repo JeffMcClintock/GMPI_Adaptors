@@ -40,7 +40,9 @@
 
 #pragma once
 
+#include <algorithm>
 #include <cassert>
+#include <cmath>
 #include <cstdio>
 #include <deque>
 #include <memory>
@@ -62,8 +64,16 @@ struct RegistrationOptions
 	const char* category = "VCV";
 	const char* vendor = "VCV (ported)";
 
-	// Raw XML appended inside <Plugin> — e.g. a <PatchPoints> block. NO XML
-	// comments in here; SynthEdit's parser rejects them (learned the hard way).
+	// Patch points are generated from the module's own widget — see
+	// generatePatchPoints(). Set false to omit them.
+	bool patchPoints = true;
+
+	// Hit radius in pixels. 0 = derive from each jack's own size, which is
+	// what the component types in plugin.hpp declare.
+	int patchPointRadius = 0;
+
+	// Raw XML appended inside <Plugin>. NO XML comments in here; SynthEdit's
+	// parser rejects them (learned the hard way).
 	const char* extraXml = nullptr;
 };
 
@@ -91,6 +101,64 @@ namespace detail
 		return buf;
 	}
 } // namespace detail
+
+// Generate <PatchPoints> from the module's own widget.
+//
+// A Rack module states its jack layout in its ModuleWidget's constructor:
+//
+//     addInput(createInputCentered<ThemedPJ301MPort>(
+//                  mm2px(Vec(7.62, 67.53)), module, Fade::IN1_INPUT));
+//
+// which is the position AND the port id together, in the module's own source.
+// That beats reading the panel SVG: the SVG's component layer is a
+// convention Fundamental happens to follow, whereas this is the code Rack
+// itself lays the panel out from, so it cannot drift from what the module
+// really has.
+//
+// Positions are in Rack panel pixels (mm2px, 1px = 1/75in), which is the same
+// space the panel SVG uses and therefore the space SynthEdit wants. They are
+// rounded because SynthEdit reads center with StringToInt.
+inline std::string generatePatchPoints(rack::ModuleWidget& widget,
+                                       size_t numInputs, size_t numOutputs,
+                                       const RegistrationOptions& opt)
+{
+	std::string pts;
+
+	auto emit = [&](const rack::PortWidget* w, size_t pinIndex)
+	{
+		if (!w)
+			return;
+
+		int radius = opt.patchPointRadius;
+		if (radius <= 0)
+			radius = static_cast<int>(std::lround(std::min(w->box.size.x, w->box.size.y) * 0.5f));
+
+		if (radius <= 0)
+			return;   // no declared size and no override — skip rather than guess
+
+		pts += "    <PatchPoint pinId=\"" + std::to_string(pinIndex)
+		     + "\" center=\"" + std::to_string(static_cast<int>(std::lround(w->box.pos.x)))
+		     + ","            + std::to_string(static_cast<int>(std::lround(w->box.pos.y)))
+		     + "\" radius=\"" + std::to_string(radius) + "\" />\n";
+	};
+
+	// Pin indices follow the generated order: inputs, then outputs.
+	for (auto* w : widget.inputWidgets)
+	{
+		if (w && w->portId >= 0 && static_cast<size_t>(w->portId) < numInputs)
+			emit(w, static_cast<size_t>(w->portId));
+	}
+	for (auto* w : widget.outputWidgets)
+	{
+		if (w && w->portId >= 0 && static_cast<size_t>(w->portId) < numOutputs)
+			emit(w, numInputs + static_cast<size_t>(w->portId));
+	}
+
+	if (pts.empty())
+		return {};
+
+	return "  <PatchPoints>\n" + pts + "  </PatchPoints>\n";
+}
 
 // Build the GMPI plugin XML from what the module's own constructor declared.
 // Constructs a throwaway instance purely to read the configuration.
@@ -151,10 +219,20 @@ inline std::string generatePluginXml(rack::Model& model, const RegistrationOptio
 	}
 	x += "  </Audio>\n";
 
+	// Jack positions, from the module's own widget. Constructed here and
+	// dropped; its child widgets leak, which is a one-off at registration and
+	// not worth a tree walk to avoid.
+	if (opt.patchPoints)
+	{
+		std::unique_ptr<rack::ModuleWidget> widget(model.createModuleWidget(probe.get()));
+		if (widget)
+			x += generatePatchPoints(*widget, probe->inputs.size(), probe->outputs.size(), opt);
+	}
+
 	if (opt.extraXml)
 		x += opt.extraXml;
 
-	x += "\n</Plugin>\n";
+	x += "</Plugin>\n";
 	return x;
 }
 
