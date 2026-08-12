@@ -12,5 +12,4 @@ ${CMAKE_CURRENT_SOURCE_DIR}
 project(GMPI_Adaptors)
 
 add_subdirectory(VST3Adaptor)
-add_subdirectory(VCVAdaptor)
 
